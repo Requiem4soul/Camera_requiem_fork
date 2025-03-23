@@ -1,0 +1,14 @@
+.venv/
+.env
+.idea/
+*.pyc
+__pycache__/
+temp_photo.jpg
+testdb.db
+*.egg-info/
+dist/
+build/
+.vscode/
+logs/
+*.log
+debug.log
