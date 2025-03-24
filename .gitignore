@@ -4,7 +4,7 @@
 *.pyc
 __pycache__/
 temp_photo.jpg
-testdb.db
+*.db
 *.egg-info/
 dist/
 build/
