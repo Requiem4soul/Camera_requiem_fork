@@ -7,6 +7,7 @@ import os
 import tempfile
 import cv2
 from image_analyz.analyzer import Image
+from data.repository import RatingRepository
 
 # Токен ТОЛЬКО подгружать из env! Не менять вручную!
 load_dotenv()
@@ -18,6 +19,8 @@ if not TOKEN:
 bot = Bot(token=TOKEN)
 
 router = Router()
+
+repo = RatingRepository()
 
 
 @router.message(Command(commands=["start"]))
@@ -52,7 +55,29 @@ async def handle_photo(message: Message):
     for metric, value in img.metrics.items():
         response += f"{metric}: {value: .2f}\n"
 
+    # Формируем ответ с результатами и таблицей
+    response = f"Результаты анализа для модели {phone_model}:\n"
+    for metric, value in img.metrics.items():
+        response += f"{metric}: {value:.2f}\n"
+
+    # TODO: Сделать кнопки для вывода рейтинговой таблицы + инструкции по отправке своих фото и моделей телефона
+    # repo.add_rating(phone_model, img.metrics)
+    # table = repo.get_average_ratings()
+    # response += "\nРейтинговая таблица:\n"
+    # for row in table:
+    #     response += f"{row['phone_model']}:\n"
+    #     # Добавляем сюда метрики новые
+    #     if row['sharpness'] is not None:
+    #         response += f"  sharpness: {row['sharpness']:.2f}\n"
+    #     if row['noise'] is not None:
+    #         response += f"  noise: {row['noise']:.2f}\n"
+    #     if row['glare'] is not None:
+    #         response += f"  glare: {row['glare']:.2f}\n"
+    #     if row['total_score'] is not None:
+    #         response += f"  total_score: {row['total_score']:.2f}\n"
+
     await message.reply(response)
+
     os.remove(file_path)
 
 
