@@ -1,42 +1,44 @@
-import cv2
 import numpy as np
-from scipy.optimize import curve_fit
+import cv2
 
-def calculate_vignetting(image):
-    """Оценивает виньетирование с помощью полярного преобразования и модели.
-    Вход: изображение как np.ndarray (RGB или grayscale).
-    Выход: оценка виньетирования от 0 (нет) до 10 (сильное).
-    """
-    if len(image.shape) == 3:
-        img = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    else:
-        img = image.copy()
+def calculate_vignetting(image: np.ndarray) -> float:
+    grad = compute_radial_gradients(image)
+    gamma = compute_asymmetry(grad)
+    return gamma
 
-    img = cv2.GaussianBlur(img, (9, 9), 0)  # Фильтрация шума
-
+def compute_radial_gradients(img: np.ndarray) -> np.ndarray:
+    if len(img.shape) == 3:
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     h, w = img.shape
-    img_4ch = np.dstack([img, np.full((h, w), 255, dtype=np.uint8)])
-    rmax = np.hypot(h, w) / 2
-    cx, cy = (w - 1) / 2, (h - 1) / 2
-    dh, dw = 360 * 2, 1000
+    y, x = np.indices((h, w))
+    x = x - w / 2
+    y = y - h / 2
+    gx = cv2.Sobel(img, cv2.CV_64F, 1, 0, ksize=3)
+    gy = cv2.Sobel(img, cv2.CV_64F, 0, 1, ksize=3)
+    r = np.sqrt(x ** 2 + y ** 2)
+    r[r == 0] = 1e-6
+    grad = (gx * x + gy * y) / r
+    print(f"Grad stats: min={grad.min()}, max={grad.max()}, mean={grad.mean()}")
+    return grad
 
-    warped = np.zeros((dh, dw, 2), dtype=np.uint8)
-    cv2.warpPolar(dst=warped, src=img_4ch, dsize=(dw, dh), center=(cx, cy),
-                  maxRadius=int(rmax), flags=cv2.INTER_LANCZOS4)
-
-    values = warped[..., 0]
-    mask = warped[..., 1]
-    mvalues = np.ma.masked_array(values, mask=(mask == 0))
-    mean_intensity = mvalues.mean(axis=0)
-
-    # Модель виньетирования
-    def vignette_model(r, I0, k):
-        r_norm = r / r.max()
-        return I0 * (1 - k * r_norm**2)
-
-    radii = np.arange(dw)
-    popt, _ = curve_fit(vignette_model, radii, mean_intensity, p0=[255, 0.1])
-    I0, k = popt
-    score = min(max(k * 20, 0), 10)  # k=0 -> 0, k=0.5 -> 10
-
-    return score
+def compute_asymmetry(grad: np.ndarray, lambda_h=0.5) -> float:
+    grad = grad.flatten()
+    # Логарифмический масштаб градиентов
+    grad_log = np.log(1 + np.abs(grad)) * np.sign(grad)  # Сохраняем знак
+    hist, bins = np.histogram(grad_log, bins=50, density=False)
+    mid = np.where(bins >= 0)[0][0]  # Делим по нулю
+    pos = hist[mid:]
+    neg = hist[:mid][::-1]
+    min_len = min(len(pos), len(neg))
+    pos, neg = pos[:min_len], neg[:min_len]
+    A1, A2 = np.sum(pos), np.sum(neg)
+    if A1 == 0 or A2 == 0:
+        return 0.0
+    H_plus = pos / A1
+    H_minus = neg / A2
+    kl_div = np.sum(H_plus * np.log((H_plus + 1e-10) / (H_minus + 1e-10)))
+    # Нормализованная разница площадей
+    total = A1 + A2
+    area_diff = (np.abs(A1 - A2) / total) ** 0.25 if total > 0 else 0
+    print(f"A1={A1}, A2={A2}, KL_div={kl_div}, Area_diff={area_diff}")
+    return lambda_h * kl_div + (1 - lambda_h) * area_diff
