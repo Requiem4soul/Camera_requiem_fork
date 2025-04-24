@@ -12,7 +12,9 @@ class Rating(Base):
     sharpness = Column(Float, nullable=True)
     noise = Column(Float, nullable=True)
     glare = Column(Float, nullable=True)
+    chromatic_aberration = Column(Float, nullable=True)
     # Тут надо будет дополнять новыми метриками
+    chromatic_aberration = Column(Float, nullable=True)
     total_score = Column(Float, nullable=True)
 
 
