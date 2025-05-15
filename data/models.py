@@ -14,6 +14,7 @@ class Rating(Base):
     glare = Column(Float, nullable=True)
     # Тут надо будет дополнять новыми метриками
     chromatic_aberration = Column(Float, nullable=True)
+    vignetting = Column(Float, nullable=True)
     total_score = Column(Float, nullable=True)
 
 
