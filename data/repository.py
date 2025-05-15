@@ -15,7 +15,7 @@ class RatingRepository:
                 noise=metrics.get("noise"),
                 glare=metrics.get("glare"),
                 # Тут надо будет дополнять новыми метриками
-                vignetting = metrics.get("vignetting")
+                vignetting = metrics.get("vignetting"),
                 chromatic_aberration=metrics.get("chromatic_aberration"),
                 total_score=total_score
             )
