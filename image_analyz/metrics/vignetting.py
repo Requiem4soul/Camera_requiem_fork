@@ -4,6 +4,12 @@ import cv2
 def calculate_vignetting(image: np.ndarray) -> float:
     grad = compute_radial_gradients(image)
     gamma = compute_asymmetry(grad)
+    if gamma <= 1:
+        gamma = 1 - gamma
+    else:
+        gamma = 0
+    gamma = gamma * 10
+    print(f"{gamma}")
     return gamma
 
 def compute_radial_gradients(img: np.ndarray) -> np.ndarray:
