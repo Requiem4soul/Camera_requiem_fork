@@ -9,7 +9,6 @@ def calculate_vignetting(image: np.ndarray) -> float:
     else:
         gamma = 0
     gamma = gamma * 10
-    print(f"{gamma}")
     return gamma
 
 def compute_radial_gradients(img: np.ndarray) -> np.ndarray:
@@ -24,7 +23,6 @@ def compute_radial_gradients(img: np.ndarray) -> np.ndarray:
     r = np.sqrt(x ** 2 + y ** 2)
     r[r == 0] = 1e-6
     grad = (gx * x + gy * y) / r
-    print(f"Grad stats: min={grad.min()}, max={grad.max()}, mean={grad.mean()}")
     return grad
 
 def compute_asymmetry(grad: np.ndarray, lambda_h=0.5) -> float:
@@ -46,5 +44,4 @@ def compute_asymmetry(grad: np.ndarray, lambda_h=0.5) -> float:
     # Нормализованная разница площадей
     total = A1 + A2
     area_diff = (np.abs(A1 - A2) / total) ** 0.25 if total > 0 else 0
-    print(f"A1={A1}, A2={A2}, KL_div={kl_div}, Area_diff={area_diff}")
     return lambda_h * kl_div + (1 - lambda_h) * area_diff

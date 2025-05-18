@@ -3,19 +3,26 @@ from data.db import get_session
 from sqlalchemy import func
 from sqlalchemy import desc
 
-
 class RatingRepository:
     def add_rating(self, phone_model, metrics):
         session = get_session()
         try:
+            # Проверяем существующие записи с таким phone_model
+            existing_count = session.query(Rating).filter(Rating.phone_model.ilike(phone_model)).count()
+            if existing_count > 0:
+                # Если модель существует, добавляем суффикс (1), (2) и т.д.
+                new_phone_model = f"{phone_model} ({existing_count})"
+            else:
+                # Если модели нет, используем оригинальное имя
+                new_phone_model = phone_model
+
             total_score = sum(metrics.values()) / len(metrics) if metrics else None
             rating = Rating(
-                phone_model=phone_model,
+                phone_model=new_phone_model,
                 sharpness=metrics.get("sharpness"),
                 noise=metrics.get("noise"),
                 glare=metrics.get("glare"),
-                # Тут надо будет дополнять новыми метриками
-                vignetting = metrics.get("vignetting"),
+                vignetting=metrics.get("vignetting"),
                 chromatic_aberration=metrics.get("chromatic_aberration"),
                 total_score=total_score
             )
@@ -31,23 +38,25 @@ class RatingRepository:
     def get_average_ratings(self):
         session = get_session()
         try:
+            # Возвращаем все записи без усреднения, сортируя по total_score
             results = session.query(
                 Rating.phone_model,
-                func.avg(Rating.sharpness).label("avg_sharpness"),
-                func.avg(Rating.noise).label("avg_noise"),
-                func.avg(Rating.glare).label("avg_glare"),
-                # Тут надо будет дополнять новыми метриками
-                func.avg(Rating.chromatic_aberration).label("avg_chromatic_aberration"),
-                func.avg(Rating.vignetting).label("avg_vignetting"),
-                func.avg(Rating.total_score).label("avg_total_score")
-            ).group_by(Rating.phone_model).order_by(desc("avg_total_score")).all()
+                Rating.sharpness,
+                Rating.noise,
+                Rating.glare,
+                Rating.chromatic_aberration,
+                Rating.vignetting,
+                Rating.total_score
+            ).order_by(desc(Rating.total_score)).all()
             return [
                 {
                     "phone_model": r.phone_model,
-                    "sharpness": r.avg_sharpness,
-                    "noise": r.avg_noise,
-                    "glare": r.avg_glare,
-                    "total_score": r.avg_total_score
+                    "sharpness": r.sharpness,
+                    "noise": r.noise,
+                    "glare": r.glare,
+                    "chromatic_aberration": r.chromatic_aberration,
+                    "vignetting": r.vignetting,
+                    "total_score": r.total_score
                 }
                 for r in results
             ]
