@@ -15,7 +15,7 @@ class RatingRepository:
                 noise=metrics.get("noise"),
                 glare=metrics.get("glare"),
                 # Тут надо будет дополнять новыми метриками
-                vignetting = metrics.get("vignetting")
+                vignetting = metrics.get("vignetting"),
                 chromatic_aberration=metrics.get("chromatic_aberration"),
                 total_score=total_score
             )
@@ -38,7 +38,7 @@ class RatingRepository:
                 func.avg(Rating.glare).label("avg_glare"),
                 # Тут надо будет дополнять новыми метриками
                 func.avg(Rating.chromatic_aberration).label("avg_chromatic_aberration"),
-                func.avg(Rating.vignetting).label("avg_vignetting")
+                func.avg(Rating.vignetting).label("avg_vignetting"),
                 func.avg(Rating.total_score).label("avg_total_score")
             ).group_by(Rating.phone_model).order_by(desc("avg_total_score")).all()
             return [
