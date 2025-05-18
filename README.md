@@ -68,7 +68,67 @@ https://github.com/user-attachments/assets/316128d8-a0ac-447e-8986-5c06f8e528a7
        # Логика анализа
        return float_value  # Оценка от 0 до 10
    ```
-3. **Перезапустите бота — метод автоматически подключится.**
+3. **В "data/models.py" добавьте в блоке свой метод, чтобы он был в БД**
+   ```python
+   class Rating(Base):
+    __tablename__ = "ratings"
+    id = Column(Integer, primary_key=True)
+    phone_model = Column(String, nullable=False)
+    sharpness = Column(Float, nullable=True)
+    noise = Column(Float, nullable=True)
+    glare = Column(Float, nullable=True)
+    # Тут надо будет дополнять новыми метриками
+    chromatic_aberration = Column(Float, nullable=True)
+    vignetting = Column(Float, nullable=True)
+    total_score = Column(Float, nullable=True)
+   ```
+3. **В "data/repository.py" в 3-ёх местах добавьте свой новый метод**
+   ```python
+               total_score = sum(metrics.values()) / len(metrics) if metrics else None
+            rating = Rating(
+                phone_model=new_phone_model,
+                sharpness=metrics.get("sharpness"),
+                noise=metrics.get("noise"),
+                glare=metrics.get("glare"),
+                # Тут добавляйте свой метод
+                vignetting=metrics.get("vignetting"),
+                chromatic_aberration=metrics.get("chromatic_aberration"),
+                total_score=total_score
+            )
+   ```
+   
+   ```python
+       def get_average_ratings(self):
+        session = get_session()
+        try:
+            # Возвращаем все записи без усреднения, сортируя по total_score
+            results = session.query(
+                Rating.phone_model,
+                Rating.sharpness,
+                Rating.noise,
+                Rating.glare,
+                # Тут добавляйте свой метод
+                Rating.chromatic_aberration,
+                Rating.vignetting,
+                Rating.total_score
+            ).order_by(desc(Rating.total_score)).all()
+            return [
+   ```
+   
+   ```python
+   return [
+                {
+                    "phone_model": r.phone_model,
+                    "sharpness": r.sharpness,
+                    "noise": r.noise,
+                    "glare": r.glare,
+                    # Тут добавляйте свой метод
+                    "chromatic_aberration": r.chromatic_aberration,
+                    "vignetting": r.vignetting,
+                    "total_score": r.total_score
+                }
+   ```
+5. **Перезапустите бота — метод автоматически подключится.**
 
 ### 🔹 Требования к методу:
 - Принимает **NumPy-массив** (`image_data`).
