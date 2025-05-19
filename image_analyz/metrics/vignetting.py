@@ -11,7 +11,14 @@ def calculate_vignetting(image: np.ndarray) -> float:
 
     asymmetry_score = compute_gradient_asymmetry(grad_radial)
 
-    score = round(asymmetry_score, 3)
+    # Ограничиваем если вдруг за 10 уйдёт
+    score_clipped = min(asymmetry_score, 10.0)
+
+    # Экспоненциальное сглаживание: чем ближе к 0, тем ближе к 10
+    score_clipped = 10.0 * np.exp(-score_clipped)
+    score = round(10.0 * np.exp(-score_clipped), 3)
+
+
     return score
 
 def compute_radial_gradient(image: np.ndarray) -> np.ndarray:
@@ -28,7 +35,7 @@ def compute_radial_gradient(image: np.ndarray) -> np.ndarray:
     x_norm = x / r
     y_norm = y / r
 
-    # Градиенты изображения (пока не тот, который нам нужен)
+    # Горизонтальные и вертикальные градиенты изображения
     gx = cv2.Sobel(image.astype(np.float32), cv2.CV_64F, 1, 0, ksize=3)
     gy = cv2.Sobel(image.astype(np.float32), cv2.CV_64F, 0, 1, ksize=3)
 
