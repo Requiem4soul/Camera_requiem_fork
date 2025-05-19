@@ -15,11 +15,10 @@ def calculate_vignetting(image: np.ndarray) -> float:
     score_clipped = min(asymmetry_score, 10.0)
 
     # Экспоненциальное сглаживание: чем ближе к 0, тем ближе к 10
-    score_clipped = 10.0 * np.exp(-score_clipped)
-    score = round(10.0 * np.exp(-score_clipped), 3)
+    score = 10.0 * np.exp(-score_clipped)
 
 
-    return score
+    return round(score, 3)
 
 def compute_radial_gradient(image: np.ndarray) -> np.ndarray:
     h, w = image.shape
