@@ -7,11 +7,13 @@ def calculate_vignetting(image: np.ndarray) -> float:
 
     if np.allclose(grad_radial, 0, atol=1e-6):  # Все градиенты близки к нулю, проверка для синтетики
         print("Кто-то решил выложить искусственный белый лист")
-        return 0.0
+        return 10.0
 
     asymmetry_score = compute_gradient_asymmetry(grad_radial)
 
-    score = round(asymmetry_score, 3)
+    score = min(asymmetry_score, 10.0)
+    score = round(10.0 - score, 3)
+    
     return score
 
 def compute_radial_gradient(image: np.ndarray) -> np.ndarray:
