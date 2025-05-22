@@ -9,6 +9,7 @@ class Rating(Base):
     __tablename__ = "ratings"
     id = Column(Integer, primary_key=True)
     phone_model = Column(String, nullable=False)
+    analysis_method = Column(String, nullable=False)
     sharpness = Column(Float, nullable=True)
     noise = Column(Float, nullable=True)
     glare = Column(Float, nullable=True)

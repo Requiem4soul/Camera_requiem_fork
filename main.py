@@ -1,6 +1,6 @@
 import asyncio
 from aiogram import Dispatcher
-from bot.telegram_bot import bot, router
+from bot.telegram_bot import bot, router, set_commands
 
 
 async def main():
@@ -8,6 +8,7 @@ async def main():
     dp.include_router(router)
 
     try:
+        await set_commands()
         # TODO: Добавить logger/loguru
         print("Бот запущен...")
         await dp.start_polling(bot)

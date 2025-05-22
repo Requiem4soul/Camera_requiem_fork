@@ -3,12 +3,20 @@ from data.db import get_session
 from sqlalchemy import func
 from sqlalchemy import desc
 
+
 class RatingRepository:
-    def add_rating(self, phone_model, metrics):
+    def add_rating(self, phone_model, metrics, analysis_method):
         session = get_session()
         try:
             # Проверяем существующие записи с таким phone_model
-            existing_count = session.query(Rating).filter(Rating.phone_model.ilike(phone_model)).count()
+            existing_count = (
+                session.query(Rating)
+                .filter(
+                    Rating.phone_model.ilike(phone_model),
+                    Rating.analysis_method == analysis_method,
+                )
+                .count()
+            )
             if existing_count > 0:
                 # Если модель существует, добавляем суффикс (1), (2) и т.д.
                 new_phone_model = f"{phone_model} ({existing_count})"
@@ -19,12 +27,13 @@ class RatingRepository:
             total_score = sum(metrics.values()) / len(metrics) if metrics else None
             rating = Rating(
                 phone_model=new_phone_model,
+                analysis_method=analysis_method,
                 sharpness=metrics.get("sharpness"),
                 noise=metrics.get("noise"),
                 glare=metrics.get("glare"),
                 vignetting=metrics.get("vignetting"),
                 chromatic_aberration=metrics.get("chromatic_aberration"),
-                total_score=total_score
+                total_score=total_score,
             )
             session.add(rating)
             session.commit()
@@ -35,19 +44,24 @@ class RatingRepository:
         finally:
             session.close()
 
-    def get_average_ratings(self):
+    def get_average_ratings(self, analysis_method=None):
         session = get_session()
         try:
-            # Возвращаем все записи без усреднения, сортируя по total_score
-            results = session.query(
+            query = session.query(
                 Rating.phone_model,
                 Rating.sharpness,
                 Rating.noise,
                 Rating.glare,
                 Rating.chromatic_aberration,
                 Rating.vignetting,
-                Rating.total_score
-            ).order_by(desc(Rating.total_score)).all()
+                Rating.total_score,
+            )
+
+            if analysis_method:
+                query = query.filter(Rating.analysis_method == analysis_method)
+
+            results = query.order_by(desc(Rating.total_score)).all()
+
             return [
                 {
                     "phone_model": r.phone_model,
@@ -56,7 +70,7 @@ class RatingRepository:
                     "glare": r.glare,
                     "chromatic_aberration": r.chromatic_aberration,
                     "vignetting": r.vignetting,
-                    "total_score": r.total_score
+                    "total_score": r.total_score,
                 }
                 for r in results
             ]
