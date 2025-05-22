@@ -229,6 +229,10 @@ def create_metrics_chart(metrics, method_id, phone_model=None):
         plt.ylabel("Значение")
         plt.ylim(0, 100)
 
+    elif method_id == "method5":
+
+        pass
+
     else:
         # Для остальных методов создаем круговую диаграмму
         labels = []
@@ -290,6 +294,9 @@ def create_combined_chart(table, method_id):
         plt.xticks(x + width, photos, rotation=45, ha="right")
         plt.legend()
         plt.ylim(0, 100)
+
+    elif method_id == "method2":
+        pass
 
     else:
         # Для остальных методов создаем линейную диаграмму
@@ -582,10 +589,20 @@ async def callback_method_selected(callback):
         else:
             # Устанавливаем метод для анализа
             user_methods[user_id] = method_id
-            await callback.message.answer(
-                f"Выбран метод: {ANALYSIS_METHODS[method_id]}\n"
-                "Теперь можешь отправлять фото для анализа!"
-            )
+            if (ANALYSIS_METHODS[method_id] == "Метод 2 - Виньетирование"):
+                await callback.message.answer(
+                    f"Выбран метод: {ANALYSIS_METHODS[method_id]}\n"
+                    "Теперь можешь отправлять фото для анализа!\n"
+                    "\n *Для данного метода необходимо выполнить следующие условия:* \n" \
+                    "\n1) Необходимо снимать белый объект (лист А4, доска в аудитории с белым фоном," \
+                    "стена однотонного белого цвета и т.д.), который равно освещён (теней не должно быть вовсе)" \
+                    "\n2) Расстояние до объекта не должно быть очень близким (меньше 10 см). Рекомендуемое расстояние" \
+                    "камеры до объекта от 15 см до метра (при условии что объект занимает весь кадр целиком)", parse_mode="Markdown")
+            else:
+                await callback.message.answer(
+                    f"Выбран метод: {ANALYSIS_METHODS[method_id]}\n"
+                    "Теперь можешь отправлять фото для анализа!"
+                )
     else:
         await callback.message.answer("Ошибка при выборе метода. Попробуй еще раз.")
     await callback.answer()
