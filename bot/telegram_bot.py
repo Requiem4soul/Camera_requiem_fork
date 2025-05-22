@@ -421,7 +421,7 @@ async def handle_photo(message: Message):
                     "Высокий" if cr > 1000 else "Средний" if cr > 500 else "Низкий"
                 )
                 response += f"• Контрастность: {cr:.1f}:1 ({cr_status})\n"
-        elif current_method == "method5":
+        elif current_method == "method2":
             for metric, value in method_metrics.items():
                 metric_name = metric.replace("_", " ").title()
                 response += f"• Виньетирование: {value:.2f}\n"
