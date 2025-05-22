@@ -29,11 +29,19 @@ def calculate_white_balance(image_data):
     return avg_brightness
 
 
-def calculate_contrast_ratio(image_data):
-    """
-    Рассчитывает контрастность (отношение самого яркого к самому тёмному).
-    Чем выше, тем лучше.
-    """
-    gray_img = cv2.cvtColor(image_data, cv2.COLOR_BGR2GRAY)
-    min_val, max_val = np.min(gray_img), np.max(gray_img)
-    return max_val / min_val + 1e-6
+def calculate_contrast_ratio(image):
+    """Рассчитывает контрастность изображения."""
+    # Преобразуем изображение в оттенки серого
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+
+    # Находим максимальное и минимальное значения яркости
+    max_val = np.max(gray)
+    min_val = np.min(gray)
+
+    # Добавляем небольшую константу к минимальному значению, чтобы избежать деления на ноль
+    min_val = max(min_val, 1)
+
+    # Рассчитываем контрастность
+    contrast_ratio = max_val / min_val
+
+    return contrast_ratio

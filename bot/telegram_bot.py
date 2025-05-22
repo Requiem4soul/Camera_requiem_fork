@@ -13,6 +13,8 @@ from dotenv import load_dotenv
 import os
 import tempfile
 import cv2
+import matplotlib.pyplot as plt
+import numpy as np
 from image_analyz.analyzer import Image
 from data.repository import RatingRepository
 
@@ -133,6 +135,159 @@ async def select_method(message: Message):
     )
 
 
+def create_metrics_chart(metrics, method_id, phone_model=None):
+    """Создает диаграмму для метрик."""
+    plt.figure(figsize=(10, 6))
+
+    if method_id == "method5":
+        # Для цветовых метрик создаем столбчатую диаграмму
+        labels = []
+        values = []
+        colors = []
+
+        if "color_gamut" in metrics:
+            labels.append("Цветовой охват")
+            values.append(metrics["color_gamut"])
+            colors.append("#FF9999")
+
+        if "white_balance" in metrics:
+            labels.append("Баланс белого")
+            values.append(metrics["white_balance"] * 100)  # Преобразуем в проценты
+            colors.append("#66B2FF")
+
+        if "contrast_ratio" in metrics:
+            labels.append("Контрастность")
+            values.append(
+                min(metrics["contrast_ratio"] / 10, 100)
+            )  # Нормализуем до 100
+            colors.append("#99FF99")
+
+        plt.bar(labels, values, color=colors)
+        plt.title(
+            "Цветовые характеристики" + (f" - {phone_model}" if phone_model else "")
+        )
+        plt.ylabel("Значение")
+        plt.ylim(0, 100)
+
+    else:
+        # Для остальных методов создаем круговую диаграмму
+        labels = []
+        values = []
+
+        for metric, value in metrics.items():
+            metric_name = metric.replace("_", " ").title()
+            labels.append(metric_name)
+            values.append(value)
+
+        plt.pie(values, labels=labels, autopct="%1.1f%%")
+        plt.title(
+            f"Метрики ({ANALYSIS_METHODS[method_id]})"
+            + (f" - {phone_model}" if phone_model else "")
+        )
+
+    # Сохраняем диаграмму во временный файл
+    with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
+        plt.savefig(tmp.name, bbox_inches="tight", dpi=300)
+        plt.close()
+        return tmp.name
+
+
+def create_combined_chart(table, method_id):
+    """Создает общую диаграмму для всех моделей."""
+    plt.figure(figsize=(12, 8))
+
+    if method_id == "method5":
+        # Для цветовых метрик создаем групповую столбчатую диаграмму
+        models = [row["phone_model"] for row in table]
+        metrics = ["color_gamut", "white_balance", "contrast_ratio"]
+        x = np.arange(len(models))
+        width = 0.25
+
+        for i, metric in enumerate(metrics):
+            values = []
+            for row in table:
+                if metric in row and row[metric] is not None:
+                    if metric == "white_balance":
+                        values.append(row[metric] * 100)
+                    elif metric == "contrast_ratio":
+                        values.append(min(row[metric] / 10, 100))
+                    else:
+                        values.append(row[metric])
+                else:
+                    values.append(0)
+
+            plt.bar(
+                x + i * width,
+                values,
+                width,
+                label=metric.replace("_", " ").title(),
+                color=["#FF9999", "#66B2FF", "#99FF99"][i],
+            )
+
+        plt.xlabel("Модели телефонов")
+        plt.ylabel("Значение")
+        plt.title("Сравнение цветовых характеристик")
+        plt.xticks(x + width, models, rotation=45, ha="right")
+        plt.legend()
+        plt.ylim(0, 100)
+
+    else:
+        # Для остальных методов создаем линейную диаграмму
+        models = [row["phone_model"] for row in table]
+        metrics = METHOD_METRICS[method_id]
+
+        for metric in metrics:
+            values = []
+            for row in table:
+                if metric in row and row[metric] is not None:
+                    values.append(row[metric])
+                else:
+                    values.append(0)
+
+            plt.plot(models, values, marker="o", label=metric.replace("_", " ").title())
+
+        plt.xlabel("Модели телефонов")
+        plt.ylabel("Значение")
+        plt.title(f"Сравнение метрик ({ANALYSIS_METHODS[method_id]})")
+        plt.xticks(rotation=45, ha="right")
+        plt.legend()
+
+    plt.tight_layout()
+
+    # Сохраняем диаграмму во временный файл
+    with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
+        plt.savefig(tmp.name, bbox_inches="tight", dpi=300)
+        plt.close()
+        return tmp.name
+
+
+async def send_metrics_chart(message, metrics, method_id, phone_model=None):
+    """Отправляет диаграмму с метриками."""
+    try:
+        chart_path = create_metrics_chart(metrics, method_id, phone_model)
+        await message.answer_photo(
+            FSInputFile(chart_path),
+            caption=f"Диаграмма метрик ({ANALYSIS_METHODS[method_id]})"
+            + (f" - {phone_model}" if phone_model else ""),
+        )
+        os.remove(chart_path)
+    except Exception as e:
+        await message.answer(f"Ошибка при создании диаграммы: {str(e)}")
+
+
+async def send_combined_chart(message, table, method_id):
+    """Отправляет общую диаграмму для всех моделей."""
+    try:
+        chart_path = create_combined_chart(table, method_id)
+        await message.answer_photo(
+            FSInputFile(chart_path),
+            caption=f"Общая диаграмма метрик ({ANALYSIS_METHODS[method_id]})",
+        )
+        os.remove(chart_path)
+    except Exception as e:
+        await message.answer(f"Ошибка при создании общей диаграммы: {str(e)}")
+
+
 @router.message(F.content_type == ContentType.DOCUMENT)
 async def handle_photo(message: Message):
     """Обработка документа с фото и подписью."""
@@ -174,14 +329,39 @@ async def handle_photo(message: Message):
         repo.add_rating(phone_model, method_metrics, current_method)
 
         # Формируем ответ
-        response = f"Результаты анализа для модели {phone_model} (Метод: {ANALYSIS_METHODS[current_method]}):\n"
-        for metric, value in method_metrics.items():
-            metric_name = metric.replace("_", " ").title()
-            response += f"{metric_name}: {value:.2f}\n"
+        response = f"Результаты анализа для модели {phone_model} (Метод: {ANALYSIS_METHODS[current_method]}):\n\n"
 
-        response += "\nРезультаты сохранены!\n Используй /ratings для просмотра таблицы рейтингов.\n"
+        # Форматируем метрики в зависимости от метода
+        if current_method == "method5":  # Цветовые метрики
+            response += "Цветовые характеристики:\n"
+            if "color_gamut" in method_metrics:
+                response += f"• Цветовой охват: {method_metrics['color_gamut']:.1f}% (от sRGB)\n"
+            if "white_balance" in method_metrics:
+                wb = method_metrics["white_balance"]
+                wb_status = (
+                    "Отличный"
+                    if 0.95 <= wb <= 1.05
+                    else "Хороший" if 0.9 <= wb <= 1.1 else "Требует коррекции"
+                )
+                response += f"• Баланс белого: {wb:.2f} ({wb_status})\n"
+            if "contrast_ratio" in method_metrics:
+                cr = method_metrics["contrast_ratio"]
+                cr_status = (
+                    "Высокий" if cr > 1000 else "Средний" if cr > 500 else "Низкий"
+                )
+                response += f"• Контрастность: {cr:.1f}:1 ({cr_status})\n"
+        else:  # Остальные метрики
+            for metric, value in method_metrics.items():
+                metric_name = metric.replace("_", " ").title()
+                response += f"• {metric_name}: {value:.2f}\n"
 
+        response += "\nРезультаты сохранены!\nИспользуй /ratings для просмотра таблицы рейтингов.\n"
+
+        # Отправляем текстовый ответ
         await message.reply(response)
+
+        # Отправляем диаграмму
+        await send_metrics_chart(message, method_metrics, current_method, phone_model)
 
     except Exception as e:
         await message.reply(f"Ошибка при анализе: {str(e)}")
@@ -230,8 +410,7 @@ async def callback_method_selected(callback):
                 table = repo.get_average_ratings(method_id)
                 if not table:
                     await callback.message.answer(
-                        "Рейтинговая таблица пуста. Отправь фото для анализа!",
-                        reply_markup=get_main_keyboard(),
+                        "Рейтинговая таблица пуста. Отправь фото для анализа!"
                     )
                     await callback.answer()
                     return
@@ -241,25 +420,56 @@ async def callback_method_selected(callback):
                 )
                 for row in table:
                     response += f"{row['phone_model']}:\n"
+                    # Фильтруем метрики только для выбранного метода
                     metrics = {
                         k: v
                         for k, v in row.items()
-                        if k not in ["phone_model", "total_score"] and v is not None
+                        if k in METHOD_METRICS[method_id] and v is not None
                     }
-                    for metric, value in metrics.items():
-                        metric_name = metric.replace("_", " ").title()
-                        response += f"  {metric_name}: {value:.2f}\n"
+
+                    # Форматируем метрики в зависимости от метода
+                    if method_id == "method5":  # Цветовые метрики
+                        response += "Цветовые характеристики:\n"
+                        if "color_gamut" in metrics:
+                            response += f"  • Цветовой охват: {metrics['color_gamut']:.1f}% (от sRGB)\n"
+                        if "white_balance" in metrics:
+                            wb = metrics["white_balance"]
+                            wb_status = (
+                                "Отличный"
+                                if 0.95 <= wb <= 1.05
+                                else (
+                                    "Хороший"
+                                    if 0.9 <= wb <= 1.1
+                                    else "Требует коррекции"
+                                )
+                            )
+                            response += f"  • Баланс белого: {wb:.2f} ({wb_status})\n"
+                        if "contrast_ratio" in metrics:
+                            cr = metrics["contrast_ratio"]
+                            cr_status = (
+                                "Высокий"
+                                if cr > 1000
+                                else "Средний" if cr > 500 else "Низкий"
+                            )
+                            response += f"  • Контрастность: {cr:.1f}:1 ({cr_status})\n"
+                    else:  # Остальные метрики
+                        for metric, value in metrics.items():
+                            metric_name = metric.replace("_", " ").title()
+                            response += f"  • {metric_name}: {value:.2f}\n"
+
                     if row["total_score"] is not None:
-                        response += f"  Total Score: {row['total_score']:.2f}\n"
+                        response += f"  • Общий балл: {row['total_score']:.2f}\n"
                     response += "\n"
 
-                await callback.message.answer(
-                    response, reply_markup=get_main_keyboard()
-                )
+                # Отправляем текстовый ответ
+                await callback.message.answer(response)
+
+                # Отправляем общую диаграмму для всех моделей
+                await send_combined_chart(callback.message, table, method_id)
+
             except Exception as e:
                 await callback.message.answer(
-                    f"Ошибка при получении рейтингов: {str(e)}",
-                    reply_markup=get_main_keyboard(),
+                    f"Ошибка при получении рейтингов: {str(e)}"
                 )
         else:
             # Устанавливаем метод для анализа
@@ -269,7 +479,7 @@ async def callback_method_selected(callback):
                 "Теперь можешь отправлять фото для анализа!"
             )
     else:
-        await callback.message.answer("Ошибка выбора метода. Попробуй еще раз.")
+        await callback.message.answer("Ошибка при выборе метода. Попробуй еще раз.")
     await callback.answer()
 
 
