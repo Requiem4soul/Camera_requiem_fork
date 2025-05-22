@@ -1,5 +1,10 @@
 from aiogram import Bot, Router, F
-from aiogram.types import Message, FSInputFile, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import (
+    Message,
+    FSInputFile,
+    InlineKeyboardMarkup,
+    InlineKeyboardButton,
+)
 from aiogram.filters import Command
 from aiogram.enums import ContentType
 from dotenv import load_dotenv
@@ -14,7 +19,9 @@ load_dotenv()
 
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 if not TOKEN:
-    raise ValueError("TELEGRAM_BOT_TOKEN не найден в .env файле! Укажи его в .env как TELEGRAM_BOT_TOKEN=your_token")
+    raise ValueError(
+        "TELEGRAM_BOT_TOKEN не найден в .env файле! Укажи его в .env как TELEGRAM_BOT_TOKEN=your_token"
+    )
 
 bot = Bot(token=TOKEN)
 
@@ -22,17 +29,31 @@ router = Router()
 
 repo = RatingRepository()
 
+
 # Кнопки для удобства
 def get_main_keyboard():
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="Показать рейтинг камер", callback_data="show_ratings")],
-        [InlineKeyboardButton(text="Инструкции", callback_data="show_instructions")]
-    ])
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="Показать рейтинг камер", callback_data="show_ratings"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="Инструкции", callback_data="show_instructions"
+                )
+            ],
+        ]
+    )
     return keyboard
+
 
 @router.message(Command(commands=["start"]))
 async def send_welcome(message: Message):
-    await message.reply("Привет! Отправь фото как документ с подписью (модель телефона), и я его проанализирую!")
+    await message.reply(
+        "Привет! Отправь фото как документ с подписью (модель телефона), и я его проанализирую!"
+    )
 
 
 @router.message(F.content_type == ContentType.DOCUMENT)
@@ -76,32 +97,43 @@ async def handle_photo(message: Message):
     finally:
         os.remove(file_path)
 
+
 @router.message(Command(commands=["ratings"]))
 async def show_ratings(message: Message):
     """Вывод рейтинговой таблицы из БД."""
     try:
         table = repo.get_average_ratings()
         if not table:
-            await message.answer("Рейтинговая таблица пуста. Отправь фото для анализа!", reply_markup=get_main_keyboard())
+            await message.answer(
+                "Рейтинговая таблица пуста. Отправь фото для анализа!",
+                reply_markup=get_main_keyboard(),
+            )
             return
 
         response = "Рейтинговая таблица:\n\n"
         for row in table:
             response += f"{row['phone_model']}:\n"
             # Исключаем phone_model и total_score из метрик
-            metrics = {k: v for k, v in row.items() if k not in ['phone_model', 'total_score'] and v is not None}
+            metrics = {
+                k: v
+                for k, v in row.items()
+                if k not in ["phone_model", "total_score"] and v is not None
+            }
             for metric, value in metrics.items():
                 # Форматируем название метрики: убираем '_' и делаем первую букву заглавной
-                metric_name = metric.replace('_', ' ').title()
+                metric_name = metric.replace("_", " ").title()
                 response += f"  {metric_name}: {value:.2f}\n"
-            if row['total_score'] is not None:
+            if row["total_score"] is not None:
                 response += f"  Total Score: {row['total_score']:.2f}\n"
             response += "\n"
 
         await message.answer(response, reply_markup=get_main_keyboard())
 
     except Exception as e:
-        await message.answer(f"Ошибка при получении рейтингов: {str(e)}", reply_markup=get_main_keyboard())
+        await message.answer(
+            f"Ошибка при получении рейтингов: {str(e)}",
+            reply_markup=get_main_keyboard(),
+        )
 
 
 @router.callback_query(F.data == "show_ratings")
@@ -110,18 +142,25 @@ async def callback_show_ratings(callback):
     try:
         table = repo.get_average_ratings()
         if not table:
-            await callback.message.answer("Рейтинговая таблица пуста. Отправь фото для анализа!", reply_markup=get_main_keyboard())
+            await callback.message.answer(
+                "Рейтинговая таблица пуста. Отправь фото для анализа!",
+                reply_markup=get_main_keyboard(),
+            )
             await callback.answer()
             return
 
         response = "Рейтинговая таблица:\n\n"
         for row in table:
             response += f"{row['phone_model']}:\n"
-            metrics = {k: v for k, v in row.items() if k not in ['phone_model', 'total_score'] and v is not None}
+            metrics = {
+                k: v
+                for k, v in row.items()
+                if k not in ["phone_model", "total_score"] and v is not None
+            }
             for metric, value in metrics.items():
-                metric_name = metric.replace('_', ' ').title()
+                metric_name = metric.replace("_", " ").title()
                 response += f"  {metric_name}: {value:.2f}\n"
-            if row['total_score'] is not None:
+            if row["total_score"] is not None:
                 response += f"  Total Score: {row['total_score']:.2f}\n"
             response += "\n"
 
@@ -129,8 +168,12 @@ async def callback_show_ratings(callback):
         await callback.answer()
 
     except Exception as e:
-        await callback.message.answer(f"Ошибка при получении рейтингов: {str(e)}", reply_markup=get_main_keyboard())
+        await callback.message.answer(
+            f"Ошибка при получении рейтингов: {str(e)}",
+            reply_markup=get_main_keyboard(),
+        )
         await callback.answer()
+
 
 @router.callback_query(F.data == "show_instructions")
 async def callback_show_instructions(callback):
@@ -141,9 +184,10 @@ async def callback_show_instructions(callback):
         "2. В подписи укажи модель телефона (например, 'iPhone 14').\n"
         "3. Я проанализирую фото и сохраню результаты.\n"
         "4. Используй /ratings для просмотра таблицы рейтингов.",
-        reply_markup=get_main_keyboard()
+        reply_markup=get_main_keyboard(),
     )
     await callback.answer()
+
 
 @router.message()
 async def handle_invalid_input(message: Message):
@@ -151,8 +195,5 @@ async def handle_invalid_input(message: Message):
     await message.reply(
         "Пожалуйста, отправь фото как документ с подписью (модель телефона).\n"
         "Для любых устройств: Прикрепить -> Файл -> Выбрать нужное фото -> Ввести в поле текста модель телефона -> Отправить",
-        reply_markup=get_main_keyboard()
+        reply_markup=get_main_keyboard(),
     )
-
-
-

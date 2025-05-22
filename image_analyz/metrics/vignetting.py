@@ -1,11 +1,14 @@
 import numpy as np
 import cv2
 
+
 def calculate_vignetting(image: np.ndarray) -> float:
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY) if len(image.shape) == 3 else image
     grad_radial = compute_radial_gradient(gray)
 
-    if np.allclose(grad_radial, 0, atol=1e-6):  # Все градиенты близки к нулю, проверка для синтетики
+    if np.allclose(
+        grad_radial, 0, atol=1e-6
+    ):  # Все градиенты близки к нулю, проверка для синтетики
         print("Кто-то решил выложить искусственный белый лист")
         return 0.0
 
@@ -17,8 +20,8 @@ def calculate_vignetting(image: np.ndarray) -> float:
     # Экспоненциальное сглаживание: чем ближе к 0, тем ближе к 10
     score = 10.0 * np.exp(-score_clipped)
 
-
     return round(score, 3)
+
 
 def compute_radial_gradient(image: np.ndarray) -> np.ndarray:
     h, w = image.shape
@@ -29,7 +32,7 @@ def compute_radial_gradient(image: np.ndarray) -> np.ndarray:
     y = y - cy
 
     # Нормированный радиус вектора
-    r = np.sqrt(x ** 2 + y ** 2)
+    r = np.sqrt(x**2 + y**2)
     r[r == 0] = 1e-6  # избегаем деления на 0
     x_norm = x / r
     y_norm = y / r
@@ -41,6 +44,7 @@ def compute_radial_gradient(image: np.ndarray) -> np.ndarray:
     # Радиальный градиент (проекция вектора градиента на радиус-вектор)
     grad_radial = gx * x_norm + gy * y_norm
     return grad_radial
+
 
 def compute_gradient_asymmetry(grad_radial: np.ndarray, bins: int = 100) -> float:
     # Приводим к логарифмическому масштабу (на нём более видны мелкие отклонения)
@@ -59,8 +63,8 @@ def compute_gradient_asymmetry(grad_radial: np.ndarray, bins: int = 100) -> floa
     h_neg = h_neg[:min_len]
 
     # Нормализация
-    h_pos /= (np.sum(h_pos) + 1e-8)
-    h_neg /= (np.sum(h_neg) + 1e-8)
+    h_pos /= np.sum(h_pos) + 1e-8
+    h_neg /= np.sum(h_neg) + 1e-8
 
     # Оценка симметрии через KL-дивергенцию и разницу площадей
     kl_div = np.sum(h_pos * np.log((h_pos + 1e-8) / (h_neg + 1e-8)))
