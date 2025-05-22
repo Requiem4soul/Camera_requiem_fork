@@ -1,26 +1,41 @@
-from sqlalchemy import Column, Integer, String, Float
+from sqlalchemy import Column, Integer, String, Float, ForeignKey, create_engine
 from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import relationship
 from data.db import engine
 
 Base = declarative_base()
 
 
-class Rating(Base):
-    __tablename__ = "ratings"
+class PhoneModel(Base):
+    """Модель телефона."""
+
+    __tablename__ = "phone_models"
+
     id = Column(Integer, primary_key=True)
-    phone_model = Column(String, nullable=False)
+    name = Column(String, unique=True, nullable=False)
+    is_default = Column(Integer, default=0)  # 1 для предустановленных моделей
+
+
+class Rating(Base):
+    """Рейтинг камеры."""
+
+    __tablename__ = "ratings"
+
+    id = Column(Integer, primary_key=True)
+    phone_model_id = Column(Integer, ForeignKey("phone_models.id"), nullable=False)
+    photo_name = Column(String, nullable=False)  # Имя фотографии
     analysis_method = Column(String, nullable=False)
-    sharpness = Column(Float, nullable=True)
-    noise = Column(Float, nullable=True)
-    glare = Column(Float, nullable=True)
-    # Тут надо будет дополнять новыми метриками
-    chromatic_aberration = Column(Float, nullable=True)
-    vignetting = Column(Float, nullable=True)
-    # Цветовые метрики
-    color_gamut = Column(Float, nullable=True)
-    white_balance = Column(Float, nullable=True)
-    contrast_ratio = Column(Float, nullable=True)
-    total_score = Column(Float, nullable=True)
+    chromatic_aberration = Column(Float)
+    vignetting = Column(Float)
+    noise = Column(Float)
+    sharpness = Column(Float)
+    color_gamut = Column(Float)
+    white_balance = Column(Float)
+    contrast_ratio = Column(Float)
+    total_score = Column(Float)
+
+    # Связь с моделью телефона
+    phone_model = relationship("PhoneModel")
 
 
 Base.metadata.create_all(bind=engine)

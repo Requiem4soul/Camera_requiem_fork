@@ -9,6 +9,8 @@ from aiogram.types import (
 )
 from aiogram.filters import Command
 from aiogram.enums import ContentType
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
 from dotenv import load_dotenv
 import os
 import tempfile
@@ -17,6 +19,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 from image_analyz.analyzer import Image
 from data.repository import RatingRepository
+from sqlalchemy.orm import Session
+from data.models import PhoneModel
+from data.db import engine
 
 # Токен ТОЛЬКО подгружать из env! Не менять вручную!
 load_dotenv()
@@ -32,6 +37,15 @@ bot = Bot(token=TOKEN)
 router = Router()
 
 repo = RatingRepository()
+
+# Инициализация предустановленных моделей
+repo.initialize_default_models()
+
+
+# Состояния для FSM
+class PhoneModelStates(StatesGroup):
+    waiting_for_model_name = State()
+
 
 ANALYSIS_METHODS = {
     "method1": "Метод 1 - Хроматическая аберрация",
@@ -51,6 +65,7 @@ METHOD_METRICS = {
 }
 
 user_methods = {}
+user_phone_models = {}
 
 
 # Кнопки для удобства
@@ -65,6 +80,16 @@ def get_main_keyboard():
             [
                 InlineKeyboardButton(
                     text="Выбрать метод анализа", callback_data="select_method"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="Выбрать модель телефона", callback_data="select_phone"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="Добавить модель телефона", callback_data="add_phone"
                 )
             ],
             [
@@ -87,12 +112,32 @@ def get_method_selection_keyboard():
     return keyboard
 
 
+def get_phone_selection_keyboard():
+    phones = repo.get_all_phone_models()
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text=phone.name, callback_data=f"phone_{phone.id}")]
+            for phone in phones
+        ]
+        + [
+            [
+                InlineKeyboardButton(
+                    text="➕ Добавить свою модель", callback_data="add_custom_phone"
+                )
+            ]
+        ]
+    )
+    return keyboard
+
+
 async def set_commands():
     commands = [
         BotCommand(command="start", description="Запустить бота"),
         BotCommand(command="ratings", description="Показать рейтинг камер"),
         BotCommand(command="instructions", description="Инструкции"),
         BotCommand(command="select_method", description="Выбрать метод анализа"),
+        BotCommand(command="select_phone", description="Выбрать модель телефона"),
+        BotCommand(command="add_phone", description="Добавить модель телефона"),
     ]
     await bot.set_my_commands(commands, scope=BotCommandScopeDefault())
 
@@ -101,15 +146,16 @@ async def set_commands():
 async def send_welcome(message: Message):
     user_id = message.from_user.id
     current_method = user_methods.get(user_id)
+    current_phone = user_phone_models.get(user_id)
 
-    welcome_text = "Привет! Отправь фото как документ с подписью (модель телефона), и я его проанализирую!\n"
+    welcome_text = "Привет! Отправь фото как документ, и я его проанализирую!\n\n"
 
-    if current_method:
+    if current_method and current_phone:
         welcome_text += f"Текущий метод анализа: {ANALYSIS_METHODS[current_method]}\n"
+        welcome_text += f"Текущая модель телефона: {current_phone}\n"
     else:
-        welcome_text += (
-            "Сначала выбери метод анализа с помощью команды /select_method\n"
-        )
+        welcome_text += "Сначала выбери метод анализа и модель телефона!\n"
+        welcome_text += "Используй команды /select_method и /select_phone"
 
     await message.reply(welcome_text, reply_markup=get_main_keyboard())
 
@@ -133,6 +179,20 @@ async def select_method(message: Message):
     await message.answer(
         "Выбери метод анализа:", reply_markup=get_method_selection_keyboard()
     )
+
+
+@router.message(Command(commands=["select_phone"]))
+async def select_phone(message: Message):
+    """Выбор модели телефона."""
+    await message.answer(
+        "Выбери модель телефона:", reply_markup=get_phone_selection_keyboard()
+    )
+
+
+@router.message(Command(commands=["add_phone"]))
+async def add_phone(message: Message):
+    """Добавление новой модели телефона."""
+    await message.answer("Введи название новой модели телефона:")
 
 
 def create_metrics_chart(metrics, method_id, phone_model=None):
@@ -193,26 +253,26 @@ def create_metrics_chart(metrics, method_id, phone_model=None):
 
 
 def create_combined_chart(table, method_id):
-    """Создает общую диаграмму для всех моделей."""
+    """Создает общую диаграмму для всех фотографий модели."""
     plt.figure(figsize=(12, 8))
 
     if method_id == "method5":
         # Для цветовых метрик создаем групповую столбчатую диаграмму
-        models = [row["phone_model"] for row in table]
+        photos = [row.photo_name for row in table]
         metrics = ["color_gamut", "white_balance", "contrast_ratio"]
-        x = np.arange(len(models))
+        x = np.arange(len(photos))
         width = 0.25
 
         for i, metric in enumerate(metrics):
             values = []
             for row in table:
-                if metric in row and row[metric] is not None:
+                if hasattr(row, metric) and getattr(row, metric) is not None:
                     if metric == "white_balance":
-                        values.append(row[metric] * 100)
+                        values.append(getattr(row, metric) * 100)
                     elif metric == "contrast_ratio":
-                        values.append(min(row[metric] / 10, 100))
+                        values.append(min(getattr(row, metric) / 10, 100))
                     else:
-                        values.append(row[metric])
+                        values.append(getattr(row, metric))
                 else:
                     values.append(0)
 
@@ -224,29 +284,29 @@ def create_combined_chart(table, method_id):
                 color=["#FF9999", "#66B2FF", "#99FF99"][i],
             )
 
-        plt.xlabel("Модели телефонов")
+        plt.xlabel("Фотографии")
         plt.ylabel("Значение")
         plt.title("Сравнение цветовых характеристик")
-        plt.xticks(x + width, models, rotation=45, ha="right")
+        plt.xticks(x + width, photos, rotation=45, ha="right")
         plt.legend()
         plt.ylim(0, 100)
 
     else:
         # Для остальных методов создаем линейную диаграмму
-        models = [row["phone_model"] for row in table]
+        photos = [row.photo_name for row in table]
         metrics = METHOD_METRICS[method_id]
 
         for metric in metrics:
             values = []
             for row in table:
-                if metric in row and row[metric] is not None:
-                    values.append(row[metric])
+                if hasattr(row, metric) and getattr(row, metric) is not None:
+                    values.append(getattr(row, metric))
                 else:
                     values.append(0)
 
-            plt.plot(models, values, marker="o", label=metric.replace("_", " ").title())
+            plt.plot(photos, values, marker="o", label=metric.replace("_", " ").title())
 
-        plt.xlabel("Модели телефонов")
+        plt.xlabel("Фотографии")
         plt.ylabel("Значение")
         plt.title(f"Сравнение метрик ({ANALYSIS_METHODS[method_id]})")
         plt.xticks(rotation=45, ha="right")
@@ -276,7 +336,7 @@ async def send_metrics_chart(message, metrics, method_id, phone_model=None):
 
 
 async def send_combined_chart(message, table, method_id):
-    """Отправляет общую диаграмму для всех моделей."""
+    """Отправляет общую диаграмму для всех фотографий модели."""
     try:
         chart_path = create_combined_chart(table, method_id)
         await message.answer_photo(
@@ -290,7 +350,7 @@ async def send_combined_chart(message, table, method_id):
 
 @router.message(F.content_type == ContentType.DOCUMENT)
 async def handle_photo(message: Message):
-    """Обработка документа с фото и подписью."""
+    """Обработка документа с фото."""
     user_id = message.from_user.id
 
     if user_id not in user_methods:
@@ -299,17 +359,20 @@ async def handle_photo(message: Message):
         )
         return
 
+    if user_id not in user_phone_models:
+        await message.reply(
+            "Сначала выбери модель телефона! Используй команду /select_phone",
+        )
+        return
+
     if not (message.document and message.document.mime_type.startswith("image/")):
         await message.reply("Отправь изображение в виде документа!")
         return
 
-    if not message.caption:
-        await message.reply("Отправь фото !с подписью!, где указана модель телефона.")
-        return
-
-    phone_model = message.caption
     photo_file_id = message.document.file_id
     current_method = user_methods[user_id]
+    current_phone = user_phone_models[user_id]
+    photo_name = message.document.file_name
 
     file_info = await bot.get_file(photo_file_id)
     with tempfile.NamedTemporaryFile(delete=False) as temp_file:
@@ -326,10 +389,11 @@ async def handle_photo(message: Message):
         }
 
         # Работа с БД
-        repo.add_rating(phone_model, method_metrics, current_method)
+        phone_model = repo.get_phone_model(current_phone)
+        repo.add_rating(phone_model.id, photo_name, method_metrics, current_method)
 
         # Формируем ответ
-        response = f"Результаты анализа для модели {phone_model} (Метод: {ANALYSIS_METHODS[current_method]}):\n\n"
+        response = f"Результаты анализа для {current_phone} (Метод: {ANALYSIS_METHODS[current_method]}):\n\n"
 
         # Форматируем метрики в зависимости от метода
         if current_method == "method5":  # Цветовые метрики
@@ -361,12 +425,56 @@ async def handle_photo(message: Message):
         await message.reply(response)
 
         # Отправляем диаграмму
-        await send_metrics_chart(message, method_metrics, current_method, phone_model)
+        await send_metrics_chart(message, method_metrics, current_method, current_phone)
 
     except Exception as e:
         await message.reply(f"Ошибка при анализе: {str(e)}")
     finally:
         os.remove(file_path)
+
+
+@router.callback_query(F.data.startswith("phone_"))
+async def callback_phone_selected(callback):
+    """Обработка выбора модели телефона."""
+    phone_id = int(callback.data.replace("phone_", ""))
+    user_id = callback.from_user.id
+
+    try:
+        with Session(engine) as session:
+            phone_model = session.query(PhoneModel).filter_by(id=phone_id).first()
+            if phone_model:
+                user_phone_models[user_id] = phone_model.name
+                await callback.message.answer(
+                    f"Выбрана модель: {phone_model.name}\n"
+                    "Теперь можешь отправлять фото для анализа!"
+                )
+            else:
+                await callback.message.answer(
+                    "Ошибка при выборе модели. Попробуй еще раз."
+                )
+    except Exception as e:
+        await callback.message.answer(
+            f"Произошла ошибка при выборе модели: {str(e)}\n" "Попробуй еще раз."
+        )
+    await callback.answer()
+
+
+@router.message(F.text.startswith("/add_phone"))
+async def handle_add_phone(message: Message):
+    """Обработка добавления новой модели телефона."""
+    model_name = message.text.replace("/add_phone", "").strip()
+    if not model_name:
+        await message.answer("Введи название модели телефона после команды /add_phone")
+        return
+
+    try:
+        phone_model = repo.add_phone_model(model_name)
+        await message.answer(
+            f"Модель {phone_model.name} успешно добавлена!\n"
+            "Теперь можешь выбрать её в списке моделей."
+        )
+    except Exception as e:
+        await message.answer(f"Ошибка при добавлении модели: {str(e)}")
 
 
 @router.message(Command(commands=["ratings"]))
@@ -388,14 +496,6 @@ async def callback_show_ratings(callback):
     await callback.answer()
 
 
-@router.message(Command(commands=["select_method"]))
-async def select_method(message: Message):
-    """Выбор метода анализа."""
-    await message.answer(
-        "Выбери метод анализа:", reply_markup=get_method_selection_keyboard()
-    )
-
-
 @router.callback_query(F.data.startswith("method_"))
 async def callback_method_selected(callback):
     """Обработка выбора метода анализа."""
@@ -405,29 +505,37 @@ async def callback_method_selected(callback):
     if method_id in ANALYSIS_METHODS:
         # Проверяем, пришел ли запрос от кнопки рейтингов
         if callback.message.text and "просмотреть данные" in callback.message.text:
-            # Показываем рейтинги для выбранного метода
+            if user_id not in user_phone_models:
+                await callback.message.answer(
+                    "Сначала выбери модель телефона! Используй команду /select_phone"
+                )
+                await callback.answer()
+                return
+
+            # Показываем рейтинги для выбранного метода и модели
             try:
-                table = repo.get_average_ratings(method_id)
-                if not table:
+                phone_model = repo.get_phone_model(user_phone_models[user_id])
+                ratings = repo.get_ratings_by_model_and_method(
+                    phone_model.id, method_id
+                )
+
+                if not ratings:
                     await callback.message.answer(
-                        "Рейтинговая таблица пуста. Отправь фото для анализа!"
+                        "Нет данных для выбранной модели и метода. Отправь фото для анализа!"
                     )
                     await callback.answer()
                     return
 
-                response = (
-                    f"Рейтинговая таблица (Метод: {ANALYSIS_METHODS[method_id]}):\n\n"
-                )
-                for row in table:
-                    response += f"{row['phone_model']}:\n"
-                    # Фильтруем метрики только для выбранного метода
+                response = f"Рейтинговая таблица для {phone_model.name} (Метод: {ANALYSIS_METHODS[method_id]}):\n\n"
+
+                for rating in ratings:
+                    response += f"Фото: {rating.photo_name}\n"
                     metrics = {
-                        k: v
-                        for k, v in row.items()
-                        if k in METHOD_METRICS[method_id] and v is not None
+                        k: getattr(rating, k)
+                        for k in METHOD_METRICS[method_id]
+                        if hasattr(rating, k) and getattr(rating, k) is not None
                     }
 
-                    # Форматируем метрики в зависимости от метода
                     if method_id == "method5":  # Цветовые метрики
                         response += "Цветовые характеристики:\n"
                         if "color_gamut" in metrics:
@@ -457,15 +565,15 @@ async def callback_method_selected(callback):
                             metric_name = metric.replace("_", " ").title()
                             response += f"  • {metric_name}: {value:.2f}\n"
 
-                    if row["total_score"] is not None:
-                        response += f"  • Общий балл: {row['total_score']:.2f}\n"
+                    if rating.total_score is not None:
+                        response += f"  • Общий балл: {rating.total_score:.2f}\n"
                     response += "\n"
 
                 # Отправляем текстовый ответ
                 await callback.message.answer(response)
 
-                # Отправляем общую диаграмму для всех моделей
-                await send_combined_chart(callback.message, table, method_id)
+                # Отправляем общую диаграмму для всех фотографий
+                await send_combined_chart(callback.message, ratings, method_id)
 
             except Exception as e:
                 await callback.message.answer(
@@ -497,9 +605,50 @@ async def callback_show_instructions(callback):
     await callback.answer()
 
 
+@router.callback_query(F.data == "add_custom_phone")
+async def callback_add_custom_phone(callback: Message, state: FSMContext):
+    """Обработка нажатия на кнопку добавления своей модели."""
+    await state.set_state(PhoneModelStates.waiting_for_model_name)
+    await callback.message.answer("Введи название новой модели телефона:")
+    await callback.answer()
+
+
+@router.message(PhoneModelStates.waiting_for_model_name)
+async def handle_custom_phone_name(message: Message, state: FSMContext):
+    """Обработка ввода названия новой модели телефона."""
+    model_name = message.text.strip()
+    if not model_name:
+        await message.answer("Название модели не может быть пустым. Попробуй еще раз.")
+        return
+
+    try:
+        phone_model = repo.add_phone_model(model_name)
+        user_id = message.from_user.id
+        user_phone_models[user_id] = phone_model.name
+
+        await message.answer(
+            f"Модель {phone_model.name} успешно добавлена и выбрана!\n"
+            "Теперь можешь отправлять фото для анализа."
+        )
+    except Exception as e:
+        await message.answer(
+            f"Ошибка при добавлении модели: {str(e)}\n" "Попробуй другое название."
+        )
+    finally:
+        await state.clear()
+
+
 @router.message()
-async def handle_invalid_input(message: Message):
-    """Обработка всех остальных случаев, кроме корректного файла с подписью."""
+async def handle_invalid_input(message: Message, state: FSMContext):
+    """Обработка всех остальных случаев."""
+    current_state = await state.get_state()
+
+    if current_state == PhoneModelStates.waiting_for_model_name:
+        await message.answer(
+            "Пожалуйста, введи название модели телефона или нажми /cancel для отмены."
+        )
+        return
+
     await message.reply(
         "Пожалуйста, сначала выбери метод анализа, а затем отправь фото как документ с подписью (модель телефона).\n"
         "Для любых устройств: Прикрепить -> Файл -> Выбрать нужное фото -> Ввести в поле текста модель телефона -> Отправить",
