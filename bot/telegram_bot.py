@@ -36,6 +36,7 @@ ANALYSIS_METHODS = {
     "method2": "Метод 2 - Виньетирование",
     "method3": "Метод 3 - Шум",
     "method4": "Метод 4 - Сверхрешётка",
+    "method5": "Метод 5 - Цвет",
 }
 
 # Метрики для каждого метода
@@ -44,6 +45,7 @@ METHOD_METRICS = {
     "method2": ["vignetting"],
     "method3": ["noise"],
     "method4": ["sharpness"],
+    "method5": ["color_gamut", "white_balance", "contrast_ratio"],
 }
 
 user_methods = {}

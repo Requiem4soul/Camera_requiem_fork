@@ -16,6 +16,10 @@ class Rating(Base):
     # Тут надо будет дополнять новыми метриками
     chromatic_aberration = Column(Float, nullable=True)
     vignetting = Column(Float, nullable=True)
+    # Цветовые метрики
+    color_gamut = Column(Float, nullable=True)
+    white_balance = Column(Float, nullable=True)
+    contrast_ratio = Column(Float, nullable=True)
     total_score = Column(Float, nullable=True)
 
 

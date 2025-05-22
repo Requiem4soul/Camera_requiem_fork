@@ -33,6 +33,10 @@ class RatingRepository:
                 glare=metrics.get("glare"),
                 vignetting=metrics.get("vignetting"),
                 chromatic_aberration=metrics.get("chromatic_aberration"),
+                # Цветовые метрики
+                color_gamut=metrics.get("color_gamut"),
+                white_balance=metrics.get("white_balance"),
+                contrast_ratio=metrics.get("contrast_ratio"),
                 total_score=total_score,
             )
             session.add(rating)
@@ -54,6 +58,10 @@ class RatingRepository:
                 Rating.glare,
                 Rating.chromatic_aberration,
                 Rating.vignetting,
+                # Цветовые метрики
+                Rating.color_gamut,
+                Rating.white_balance,
+                Rating.contrast_ratio,
                 Rating.total_score,
             )
 
@@ -70,6 +78,10 @@ class RatingRepository:
                     "glare": r.glare,
                     "chromatic_aberration": r.chromatic_aberration,
                     "vignetting": r.vignetting,
+                    # Цветовые метрики
+                    "color_gamut": r.color_gamut,
+                    "white_balance": r.white_balance,
+                    "contrast_ratio": r.contrast_ratio,
                     "total_score": r.total_score,
                 }
                 for r in results
