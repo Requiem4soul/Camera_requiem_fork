@@ -32,10 +32,18 @@ router = Router()
 repo = RatingRepository()
 
 ANALYSIS_METHODS = {
-    "method1": "Метод 1 - chromatic_aberration",
+    "method1": "Метод 1 - Хроматическая аберрация",
     "method2": "Метод 2 - Виньетирование",
     "method3": "Метод 3 - Шум",
     "method4": "Метод 4 - Сверхрешётка",
+}
+
+# Метрики для каждого метода
+METHOD_METRICS = {
+    "method1": ["chromatic_aberration"],
+    "method2": ["vignetting"],
+    "method3": ["noise"],
+    "method4": ["sharpness"],
 }
 
 user_methods = {}
@@ -102,6 +110,27 @@ async def send_welcome(message: Message):
     await message.reply(welcome_text, reply_markup=get_main_keyboard())
 
 
+@router.message(Command(commands=["instructions"]))
+async def show_instructions(message: Message):
+    """Показать инструкции."""
+    await message.answer(
+        "Инструкции:\n"
+        "1. Выбери метод анализа с помощью команды /select_method.\n"
+        "2. Отправь фото как документ (Прикрепить -> Файл -> Выбрать фото).\n"
+        "3. В подписи укажи модель телефона (например, 'iPhone 14').\n"
+        "4. Я проанализирую фото и сохраню результаты.\n"
+        "5. Используй /ratings для просмотра таблицы рейтингов."
+    )
+
+
+@router.message(Command(commands=["select_method"]))
+async def select_method(message: Message):
+    """Выбор метода анализа."""
+    await message.answer(
+        "Выбери метод анализа:", reply_markup=get_method_selection_keyboard()
+    )
+
+
 @router.message(F.content_type == ContentType.DOCUMENT)
 async def handle_photo(message: Message):
     """Обработка документа с фото и подписью."""
@@ -109,8 +138,7 @@ async def handle_photo(message: Message):
 
     if user_id not in user_methods:
         await message.reply(
-            "Сначала выбери метод анализа! Нажми кнопку 'Выбрать метод анализа'",
-            reply_markup=get_main_keyboard(),
+            "Сначала выбери метод анализа! Используй команду /select_method",
         )
         return
 
@@ -124,6 +152,7 @@ async def handle_photo(message: Message):
 
     phone_model = message.caption
     photo_file_id = message.document.file_id
+    current_method = user_methods[user_id]
 
     file_info = await bot.get_file(photo_file_id)
     with tempfile.NamedTemporaryFile(delete=False) as temp_file:
@@ -134,17 +163,23 @@ async def handle_photo(message: Message):
         img = Image(cv2.imread(file_path))
         img.analyze()
 
+        # Фильтруем метрики только для выбранного метода
+        method_metrics = {
+            k: v for k, v in img.metrics.items() if k in METHOD_METRICS[current_method]
+        }
+
         # Работа с БД
-        repo.add_rating(phone_model, img.metrics, user_methods[user_id])
+        repo.add_rating(phone_model, method_metrics, current_method)
 
         # Формируем ответ
-        response = f"Результаты анализа для модели {phone_model} (Метод: {ANALYSIS_METHODS[user_methods[user_id]]}):\n"
-        for metric, value in img.metrics.items():
-            response += f"{metric}: {value: .2f}\n"
+        response = f"Результаты анализа для модели {phone_model} (Метод: {ANALYSIS_METHODS[current_method]}):\n"
+        for metric, value in method_metrics.items():
+            metric_name = metric.replace("_", " ").title()
+            response += f"{metric_name}: {value:.2f}\n"
 
-        response += "\nРезультаты сохранены!\n Используй /ratings, чтобы увидеть таблицу рейтинга камер.\n"
+        response += "\nРезультаты сохранены!\n Используй /ratings для просмотра таблицы рейтингов.\n"
 
-        await message.reply(response, reply_markup=get_main_keyboard())
+        await message.reply(response)
 
     except Exception as e:
         await message.reply(f"Ошибка при анализе: {str(e)}")
