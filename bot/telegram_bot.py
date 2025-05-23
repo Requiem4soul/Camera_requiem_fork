@@ -17,6 +17,7 @@ import tempfile
 import cv2
 import matplotlib.pyplot as plt
 import numpy as np
+import json
 from image_analyz.analyzer import Image
 from data.repository import RatingRepository
 from sqlalchemy.orm import Session
@@ -58,7 +59,7 @@ ANALYSIS_METHODS = {
 # Метрики для каждого метода
 METHOD_METRICS = {
     "method1": ["chromatic_aberration"],
-    "method2": ["vignetting"],
+    "method2": ["vignetting", "hist", "bin_edges", "grad_flat"], # Просьба в данной строчке не менять ничего, или сообщить Хромых ИА об изменениях
     "method3": ["noise"],
     "method4": ["sharpness"],
     "method5": ["color_gamut", "white_balance", "contrast_ratio"],
@@ -229,9 +230,24 @@ def create_metrics_chart(metrics, method_id, phone_model=None):
         plt.ylabel("Значение")
         plt.ylim(0, 100)
 
-    elif method_id == "method5":
 
-        pass
+
+    elif method_id == "method2":  # Просьба в данном блоке не менять ничего, или сообщить Хромых ИА об изменениях
+
+        hist = json.loads(metrics["hist"]) if isinstance(metrics["hist"], str) else metrics["hist"]
+        bin_edges = json.loads(metrics["bin_edges"]) if isinstance(metrics["bin_edges"], str) else metrics["bin_edges"]
+
+        centers = 0.5 * (np.array(bin_edges[:-1]) + np.array(bin_edges[1:]))
+
+        plt.figure(figsize=(8, 4))
+        plt.plot(centers, hist, label="Гистограмма", color="blue")
+        plt.axvline(0, color="red", linestyle="--", label="Ось симметрии")
+        plt.title("Гистограмма логарифмированных радиальных градиентов")
+        plt.xlabel("log(градиент по радиусу)")
+        plt.ylabel("Плотность")
+        plt.legend()
+        plt.grid(True)
+        plt.tight_layout()
 
     else:
         # Для остальных методов создаем круговую диаграмму
@@ -295,8 +311,59 @@ def create_combined_chart(table, method_id):
         plt.legend()
         plt.ylim(0, 100)
 
-    elif method_id == "method2":
-        pass
+
+
+    elif method_id == "method2":  # Просьба в данном блоке не менять ничего, или сообщить Хромых ИА об изменениях
+
+
+        num_photos = len(table)
+
+        cols = 2
+
+        rows = (num_photos + 1) // cols
+
+        fig, axes = plt.subplots(rows, cols, figsize=(12, 4 * rows))
+
+        axes = axes.flatten() if num_photos > 1 else [axes]
+
+        for i, row in enumerate(table):
+
+            try:
+
+                hist = json.loads(row.hist) if isinstance(row.hist, str) else row.hist
+
+                bin_edges = json.loads(row.bin_edges) if isinstance(row.bin_edges, str) else row.bin_edges
+
+                centers = 0.5 * (np.array(bin_edges[:-1]) + np.array(bin_edges[1:]))
+
+                ax = axes[i]
+
+                ax.plot(centers, hist, label="Гистограмма", color="blue")
+
+                ax.axvline(0, color="red", linestyle="--", label="Ось симметрии")
+
+                ax.set_title(row.photo_name)
+
+                ax.set_xlabel("log(градиент по радиусу)")
+
+                ax.set_ylabel("Плотность")
+
+                ax.grid(True)
+
+                ax.legend()
+
+            except Exception as e:
+
+                ax = axes[i]
+
+                ax.text(0.5, 0.5, f"Ошибка:\n{e}", ha="center", va="center")
+
+                ax.axis("off")
+
+        for j in range(i + 1, len(axes)):
+            axes[j].axis("off")
+
+        plt.tight_layout()
 
     else:
         # Для остальных методов создаем линейную диаграмму
@@ -395,6 +462,10 @@ async def handle_photo(message: Message):
             k: v for k, v in img.metrics.items() if k in METHOD_METRICS[current_method]
         }
 
+        for key in ["hist", "bin_edges", "grad_flat"]: # Просьба в данном блоке не менять ничего, или сообщить Хромых ИА об изменениях
+            if key in method_metrics and isinstance(method_metrics[key], list):
+                method_metrics[key] = json.dumps(method_metrics[key])
+
         # Работа с БД
         phone_model = repo.get_phone_model(current_phone)
         repo.add_rating(phone_model.id, photo_name, method_metrics, current_method)
@@ -422,9 +493,8 @@ async def handle_photo(message: Message):
                 )
                 response += f"• Контрастность: {cr:.1f}:1 ({cr_status})\n"
         elif current_method == "method2":
-            for metric, value in method_metrics.items():
-                metric_name = metric.replace("_", " ").title()
-                response += f"• Виньетирование: {value:.2f}\n"
+            if "vignetting" in method_metrics: # Просьба в данном блоке не менять ничего, или сообщить Хромых ИА об изменениях
+                response += f"• Виньетирование: {method_metrics['vignetting']:.2f}\n"
         else:  # Остальные метрики
             for metric, value in method_metrics.items():
                 metric_name = metric.replace("_", " ").title()
@@ -571,6 +641,11 @@ async def callback_method_selected(callback):
                                 else "Средний" if cr > 500 else "Низкий"
                             )
                             response += f"  • Контрастность: {cr:.1f}:1 ({cr_status})\n"
+
+                    elif method_id == "method2": # Просьба в данном блоке не менять ничего, или сообщить Хромых ИА об изменениях
+                        if "vignetting" in metrics:
+                            response += f"  • Виньетирование: {metrics['vignetting']:.2f}\n"
+
                     else:  # Остальные метрики
                         for metric, value in metrics.items():
                             metric_name = metric.replace("_", " ").title()

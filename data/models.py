@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, ForeignKey, create_engine
+from sqlalchemy import Column, Integer, String, Float, ForeignKey, Text, create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 from data.db import engine
@@ -26,7 +26,10 @@ class Rating(Base):
     photo_name = Column(String, nullable=False)  # Имя фотографии
     analysis_method = Column(String, nullable=False)
     chromatic_aberration = Column(Float)
-    vignetting = Column(Float)
+    vignetting = Column(Float) # Просьба в данной строке не менять ничего, или сообщить Хромых ИА об изменениях
+    hist = Column(Text) # Просьба в данной строке не менять ничего, или сообщить Хромых ИА об изменениях
+    bin_edges = Column(Text) # Просьба в данной строке не менять ничего, или сообщить Хромых ИА об изменениях
+    grad_flat = Column(Text) # Просьба в данной строке не менять ничего, или сообщить Хромых ИА об изменениях
     noise = Column(Float)
     sharpness = Column(Float)
     color_gamut = Column(Float)
