@@ -315,53 +315,46 @@ def create_combined_chart(table, method_id):
 
     elif method_id == "method2":  # Просьба в данном блоке не менять ничего, или сообщить Хромых ИА об изменениях
 
-
         num_photos = len(table)
 
-        cols = 2
+        if num_photos == 0:
+            raise ValueError("Нет данных для построения диаграммы")
 
-        rows = (num_photos + 1) // cols
+        # Если одно фото, создаем один подграфик, иначе создаем сетку
 
-        fig, axes = plt.subplots(rows, cols, figsize=(12, 4 * rows))
+        if num_photos == 1:
+            fig, ax = plt.subplots(1, 1, figsize=(8, 4))
+            axes = [ax]
 
-        axes = axes.flatten() if num_photos > 1 else [axes]
+        else:
+            cols = 2
+            rows = (num_photos + 1) // cols
+            fig, axes = plt.subplots(rows, cols, figsize=(12, 4 * rows))
+            axes = axes.flatten()
 
         for i, row in enumerate(table):
-
             try:
-
                 hist = json.loads(row.hist) if isinstance(row.hist, str) else row.hist
-
                 bin_edges = json.loads(row.bin_edges) if isinstance(row.bin_edges, str) else row.bin_edges
-
                 centers = 0.5 * (np.array(bin_edges[:-1]) + np.array(bin_edges[1:]))
-
                 ax = axes[i]
-
                 ax.plot(centers, hist, label="Гистограмма", color="blue")
-
                 ax.axvline(0, color="red", linestyle="--", label="Ось симметрии")
-
                 ax.set_title(row.photo_name)
-
                 ax.set_xlabel("log(градиент по радиусу)")
-
                 ax.set_ylabel("Плотность")
-
                 ax.grid(True)
-
                 ax.legend()
 
             except Exception as e:
-
                 ax = axes[i]
-
                 ax.text(0.5, 0.5, f"Ошибка:\n{e}", ha="center", va="center")
-
                 ax.axis("off")
+                
+        if num_photos > 1:
 
-        for j in range(i + 1, len(axes)):
-            axes[j].axis("off")
+            for j in range(i + 1, len(axes)):
+                axes[j].axis("off")
 
         plt.tight_layout()
 
@@ -672,11 +665,13 @@ async def callback_method_selected(callback):
                 await callback.message.answer(
                     f"Выбран метод: {ANALYSIS_METHODS[method_id]}\n"
                     "Теперь можешь отправлять фото для анализа!\n"
-                    "\n *Для данного метода необходимо выполнить следующие условия:* \n" \
+                    "\n *Для данного метода необходимо выполнить следующие условия съёмки:* \n" \
                     "\n1) Необходимо снимать белый объект (лист А4, доска в аудитории с белым фоном," \
                     "стена однотонного белого цвета и т.д.), который равно освещён (теней не должно быть вовсе)" \
                     "\n2) Расстояние до объекта не должно быть очень близким (меньше 10 см). Рекомендуемое расстояние" \
-                    "камеры до объекта от 15 см до метра (при условии что объект занимает весь кадр целиком)", parse_mode="Markdown")
+                    "камеры до объекта от 15 см до метра (при условии что объект занимает весь кадр целиком)\n" \
+                    "\n *Для данного метода необходимо выполнить следующие условия настройки камеры:* \n" \
+                    "\nНеобходимо отключить все фильтры, улучшения (ИИ, автоматическая коррекция и так далее)", parse_mode="Markdown")
             else:
                 await callback.message.answer(
                     f"Выбран метод: {ANALYSIS_METHODS[method_id]}\n"
