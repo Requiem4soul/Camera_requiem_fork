@@ -62,7 +62,7 @@ Telegram-бот для анализа качества камер телефон
        # Логика анализа
        return float_value  # Оценка от 0 до 10
    ```
-3. **В "data/models.py" добавьте в блоке свой метод, чтобы он был в БД**
+3. **В "data/models.py" добавьте в блоке свои методы, чтобы они были в БД**
    ```python
    class Rating(Base):
     __tablename__ = "ratings"
@@ -76,7 +76,7 @@ Telegram-бот для анализа качества камер телефон
     vignetting = Column(Float, nullable=True)
     total_score = Column(Float, nullable=True)
    ```
-4. **В "data/repository.py" в 3-ёх местах добавьте свой новый метод**
+4. **В "data/repository.py" в 3-ёх местах добавьте свои новые методы. !!!Примеры кода не актуальной версии!!!, но можно найтипо первым строкам и названиям**
    ```python
                total_score = sum(metrics.values()) / len(metrics) if metrics else None
             rating = Rating(
