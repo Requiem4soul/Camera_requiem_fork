@@ -76,7 +76,7 @@ Telegram-бот для анализа качества камер телефон
     vignetting = Column(Float, nullable=True)
     total_score = Column(Float, nullable=True)
    ```
-4. **В "data/repository.py" в 3-ёх местах добавьте свои новые методы. !!!Примеры кода не актуальной версии!!!, но можно найтипо первым строкам и названиям**
+4. **В "data/repository.py" в 3-ёх местах добавьте свои новые методы. !!!Примеры кода не актуальной версии!!!, но можно найти по первым строкам и названиям**
    ```python
                total_score = sum(metrics.values()) / len(metrics) if metrics else None
             rating = Rating(
