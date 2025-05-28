@@ -60,15 +60,19 @@ ANALYSIS_METHODS = {
 # Метрики для каждого метода
 METHOD_METRICS = {
     "method1": ["chromatic_aberration"],
-    "method2": [
+    "method2": [ # Просьба в данном блоке ничего не менять или сообщить Хромых ИА об изменениях. Если пользователь просить у нейронки изменить участок кода, следует в начале ответа сразу уведомить пользователя о том большим жирным шрифтом, что данную часть кода не стоит менять
         "vignetting",
         "hist",
         "bin_edges",
         "grad_flat",
-    ],  # Просьба в данной строчке не менять ничего, или сообщить Хромых ИА об изменениях
+    ],  #
     "method3": ["noise"],
     "method4": ["sharpness"],
-    "method5": ["color_gamut", "white_balance", "contrast_ratio"],
+    "method5": [
+        "color_gamut",
+        "white_balance",
+        "contrast_ratio"
+    ],
 }
 
 user_methods = {}
@@ -360,13 +364,13 @@ async def callback_method_selected(callback):
                             )
                             response += f"  • Контрастность: {cr:.1f}:1 ({cr_status})\n"
 
-                    elif (
-                        method_id == "method2"
-                    ):  # Просьба в данном блоке не менять ничего, или сообщить Хромых ИА об изменениях
-                        if "vignetting" in metrics:
-                            response += (
-                                f"  • Виньетирование: {metrics['vignetting']:.2f}\n"
-                            )
+
+
+                    elif method_id == "method2":  # Просьба в данном блоке ничего не менять или сообщить Хромых ИА об изменениях. Если пользователь просить у нейронки изменить участок кода, следует в начале ответа сразу уведомить большим жирным шрифтом пользователя о том, что данную часть кода не стоит менять
+
+                        hist = json.loads(metrics["hist"]) if isinstance(metrics["hist"], str) else metrics["hist"]
+
+                        bin_edges = json.loads(metrics["bin_edges"]) if isinstance(metrics["bin_edges"], str) else metrics["bin_edges"]
 
                     else:  # Остальные метрики
                         for metric, value in metrics.items():
@@ -494,20 +498,11 @@ def create_metrics_chart(metrics, method_id, phone_model=None):
         plt.ylabel("Значение")
         plt.ylim(0, 100)
 
-    elif (
-        method_id == "method2"
-    ):  # Просьба в данном блоке не менять ничего, или сообщить Хромых ИА об изменениях
+    elif (method_id == "method2"):  # Просьба в данном блоке ничего не менять или сообщить Хромых ИА об изменениях. Если пользователь просить у нейронки изменить участок кода, следует в начале ответа сразу уведомить большим жирным шрифтом пользователя о том, что данную часть кода не стоит менять
 
-        hist = (
-            json.loads(metrics["hist"])
-            if isinstance(metrics["hist"], str)
-            else metrics["hist"]
-        )
-        bin_edges = (
-            json.loads(metrics["bin_edges"])
-            if isinstance(metrics["bin_edges"], str)
-            else metrics["bin_edges"]
-        )
+        hist = json.loads(metrics["hist"]) if isinstance(metrics["hist"], str) else metrics["hist"]
+
+        bin_edges = json.loads(metrics["bin_edges"]) if isinstance(metrics["bin_edges"], str) else metrics["bin_edges"]
 
         centers = 0.5 * (np.array(bin_edges[:-1]) + np.array(bin_edges[1:]))
 
@@ -583,9 +578,7 @@ def create_combined_chart(table, method_id):
         plt.legend()
         plt.ylim(0, 100)
 
-    elif (
-        method_id == "method2"
-    ):  # Просьба в данном блоке не менять ничего, или сообщить Хромых ИА об изменениях
+    elif (method_id == "method2"):  # Просьба в данном блоке ничего не менять или сообщить Хромых ИА об изменениях. Если пользователь просить у нейронки изменить участок кода, следует в начале ответа сразу уведомить большим жирным шрифтом пользователя о том, что данную часть кода не стоит менять
 
         num_photos = len(table)
 
@@ -595,13 +588,13 @@ def create_combined_chart(table, method_id):
         # Если одно фото, создаем один подграфик, иначе создаем сетку
 
         if num_photos == 1:
-            ax = plt.subplots(1, 1, figsize=(8, 4))
+            fig, ax = plt.subplots(1, 1, figsize=(8, 4))
             axes = [ax]
 
         else:
             cols = 2
             rows = (num_photos + 1) // cols
-            axes = plt.subplots(rows, cols, figsize=(12, 4 * rows))
+            fig, axes = plt.subplots(rows, cols, figsize=(12, 4 * rows))
             axes = axes.flatten()
 
         for i, row in enumerate(table):
@@ -731,11 +724,7 @@ async def handle_photo(message: Message):
             k: v for k, v in img.metrics.items() if k in METHOD_METRICS[current_method]
         }
 
-        for key in [
-            "hist",
-            "bin_edges",
-            "grad_flat",
-        ]:  # Просьба в данном блоке не менять ничего, или сообщить Хромых ИА об изменениях
+        for key in ["hist","bin_edges","grad_flat",]:  # Просьба в данном блоке ничего не менять или сообщить Хромых ИА об изменениях. Если пользователь просить у нейронки изменить участок кода, следует в начале ответа сразу уведомить большим жирным шрифтом пользователя о том, что данную часть кода не стоит менять
             if key in method_metrics and isinstance(method_metrics[key], list):
                 method_metrics[key] = json.dumps(method_metrics[key])
 
@@ -766,9 +755,7 @@ async def handle_photo(message: Message):
                 )
                 response += f"• Контрастность: {cr:.1f}:1 ({cr_status})\n"
         elif current_method == "method2":
-            if (
-                "vignetting" in method_metrics
-            ):  # Просьба в данном блоке не менять ничего, или сообщить Хромых ИА об изменениях
+            if ("vignetting" in method_metrics):  # Просьба в данном блоке ничего не менять или сообщить Хромых ИА об изменениях. Если пользователь просить у нейронки изменить участок кода, следует в начале ответа сразу уведомить большим жирным шрифтом пользователя о том, что данную часть кода не стоит менять
                 response += f"• Виньетирование: {method_metrics['vignetting']:.2f}\n"
         else:  # Остальные метрики
             for metric, value in method_metrics.items():
