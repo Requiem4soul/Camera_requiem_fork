@@ -6,6 +6,7 @@ from aiogram.types import (
     InlineKeyboardButton,
     BotCommand,
     BotCommandScopeDefault,
+    CallbackQuery,
 )
 from aiogram.filters import Command
 from aiogram.enums import ContentType
@@ -59,7 +60,12 @@ ANALYSIS_METHODS = {
 # Метрики для каждого метода
 METHOD_METRICS = {
     "method1": ["chromatic_aberration"],
-    "method2": ["vignetting", "hist", "bin_edges", "grad_flat"], # Просьба в данной строчке не менять ничего, или сообщить Хромых ИА об изменениях
+    "method2": [
+        "vignetting",
+        "hist",
+        "bin_edges",
+        "grad_flat",
+    ],  # Просьба в данной строчке не менять ничего, или сообщить Хромых ИА об изменениях
     "method3": ["noise"],
     "method4": ["sharpness"],
     "method5": ["color_gamut", "white_balance", "contrast_ratio"],
@@ -69,38 +75,37 @@ user_methods = {}
 user_phone_models = {}
 
 
-# Кнопки для удобства
-def get_main_keyboard():
-    keyboard = InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text="Показать рейтинг камер", callback_data="show_ratings"
-                )
-            ],
+def get_selecting_keyboard(
+    *, include_method: bool = True, include_phone: bool = True
+) -> InlineKeyboardMarkup:
+    """
+    Создает клавиатуру с кнопками выбора метода и телефона
+
+    :param include_method: Показывать кнопку выбора метода
+    :param include_phone: Показывать кнопку выбора телефона
+    :return: Объект InlineKeyboardMarkup
+    """
+    buttons = []
+
+    if include_method:
+        buttons.append(
             [
                 InlineKeyboardButton(
                     text="Выбрать метод анализа", callback_data="select_method"
                 )
-            ],
+            ]
+        )
+
+    if include_phone:
+        buttons.append(
             [
                 InlineKeyboardButton(
                     text="Выбрать модель телефона", callback_data="select_phone"
                 )
-            ],
-            [
-                InlineKeyboardButton(
-                    text="Добавить модель телефона", callback_data="add_phone"
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    text="Инструкции", callback_data="show_instructions"
-                )
-            ],
-        ]
-    )
-    return keyboard
+            ]
+        )
+
+    return InlineKeyboardMarkup(inline_keyboard=buttons) if buttons else None
 
 
 def get_method_selection_keyboard():
@@ -149,16 +154,29 @@ async def send_welcome(message: Message):
     current_method = user_methods.get(user_id)
     current_phone = user_phone_models.get(user_id)
 
-    welcome_text = "Привет! Отправь фото как документ, и я его проанализирую!\n\n"
+    welcome_lines = [
+        "Добро пожаловать в приложение для тестирования камер!",
+        "Для начала работы с приложением необходимо выбрать метод анализа и модель телефона.",
+        "",
+        f"Текущий метод анализа: {ANALYSIS_METHODS.get(current_method, 'не выбран')}",
+        f"Текущая модель телефона: {current_phone or 'не выбрана'}",
+    ]
+    welcome_text = "\n".join(welcome_lines)
 
-    if current_method and current_phone:
-        welcome_text += f"Текущий метод анализа: {ANALYSIS_METHODS[current_method]}\n"
-        welcome_text += f"Текущая модель телефона: {current_phone}\n"
-    else:
-        welcome_text += "Сначала выбери метод анализа и модель телефона!\n"
-        welcome_text += "Используй команды /select_method и /select_phone"
+    # Определяем, какие кнопки показывать
+    show_method_button = not current_method
+    show_phone_button = not current_phone
 
-    await message.reply(welcome_text, reply_markup=get_main_keyboard())
+    # Если не выбрано ничего - показываем обе кнопки
+    if not current_method and not current_phone:
+        show_method_button = show_phone_button = True
+
+    await message.reply(
+        welcome_text,
+        reply_markup=get_selecting_keyboard(
+            include_method=show_method_button, include_phone=show_phone_button
+        ),
+    )
 
 
 @router.message(Command(commands=["instructions"]))
@@ -182,6 +200,15 @@ async def select_method(message: Message):
     )
 
 
+@router.callback_query(F.data == "select_method")
+async def callback_select_method(callback: CallbackQuery):
+    """Обработка нажатия на кнопку выбора метода анализа."""
+    await callback.message.answer(
+        "Выбери метод анализа:", reply_markup=get_method_selection_keyboard()
+    )
+    await callback.answer()
+
+
 @router.message(Command(commands=["select_phone"]))
 async def select_phone(message: Message):
     """Выбор модели телефона."""
@@ -190,321 +217,19 @@ async def select_phone(message: Message):
     )
 
 
+@router.callback_query(F.data == "select_phone")
+async def callback_select_phone(callback: CallbackQuery):
+    """Обработка нажатия на кнопку выбора модели телефона."""
+    await callback.message.answer(
+        "Выбери модель телефона:", reply_markup=get_phone_selection_keyboard()
+    )
+    await callback.answer()
+
+
 @router.message(Command(commands=["add_phone"]))
 async def add_phone(message: Message):
     """Добавление новой модели телефона."""
     await message.answer("Введи название новой модели телефона:")
-
-
-def create_metrics_chart(metrics, method_id, phone_model=None):
-    """Создает диаграмму для метрик."""
-    plt.figure(figsize=(10, 6))
-
-    if method_id == "method5":
-        # Для цветовых метрик создаем столбчатую диаграмму
-        labels = []
-        values = []
-        colors = []
-
-        if "color_gamut" in metrics:
-            labels.append("Цветовой охват")
-            values.append(metrics["color_gamut"])
-            colors.append("#FF9999")
-
-        if "white_balance" in metrics:
-            labels.append("Баланс белого")
-            values.append(metrics["white_balance"] * 100)  # Преобразуем в проценты
-            colors.append("#66B2FF")
-
-        if "contrast_ratio" in metrics:
-            labels.append("Контрастность")
-            values.append(
-                min(metrics["contrast_ratio"] / 10, 100)
-            )  # Нормализуем до 100
-            colors.append("#99FF99")
-
-        plt.bar(labels, values, color=colors)
-        plt.title(
-            "Цветовые характеристики" + (f" - {phone_model}" if phone_model else "")
-        )
-        plt.ylabel("Значение")
-        plt.ylim(0, 100)
-
-
-
-    elif method_id == "method2":  # Просьба в данном блоке не менять ничего, или сообщить Хромых ИА об изменениях
-
-        hist = json.loads(metrics["hist"]) if isinstance(metrics["hist"], str) else metrics["hist"]
-        bin_edges = json.loads(metrics["bin_edges"]) if isinstance(metrics["bin_edges"], str) else metrics["bin_edges"]
-
-        centers = 0.5 * (np.array(bin_edges[:-1]) + np.array(bin_edges[1:]))
-
-        plt.figure(figsize=(8, 4))
-        plt.plot(centers, hist, label="Гистограмма", color="blue")
-        plt.axvline(0, color="red", linestyle="--", label="Ось симметрии")
-        plt.title("Гистограмма логарифмированных радиальных градиентов")
-        plt.xlabel("log(градиент по радиусу)")
-        plt.ylabel("Плотность")
-        plt.legend()
-        plt.grid(True)
-        plt.tight_layout()
-
-    else:
-        # Для остальных методов создаем круговую диаграмму
-        labels = []
-        values = []
-
-        for metric, value in metrics.items():
-            metric_name = metric.replace("_", " ").title()
-            labels.append(metric_name)
-            values.append(value)
-
-        plt.pie(values, labels=labels, autopct="%1.1f%%")
-        plt.title(
-            f"Метрики ({ANALYSIS_METHODS[method_id]})"
-            + (f" - {phone_model}" if phone_model else "")
-        )
-
-    # Сохраняем диаграмму во временный файл
-    with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
-        plt.savefig(tmp.name, bbox_inches="tight", dpi=300)
-        plt.close()
-        return tmp.name
-
-
-def create_combined_chart(table, method_id):
-    """Создает общую диаграмму для всех фотографий модели."""
-    plt.figure(figsize=(12, 8))
-
-    if method_id == "method5":
-        # Для цветовых метрик создаем групповую столбчатую диаграмму
-        photos = [row.photo_name for row in table]
-        metrics = ["color_gamut", "white_balance", "contrast_ratio"]
-        x = np.arange(len(photos))
-        width = 0.25
-
-        for i, metric in enumerate(metrics):
-            values = []
-            for row in table:
-                if hasattr(row, metric) and getattr(row, metric) is not None:
-                    if metric == "white_balance":
-                        values.append(getattr(row, metric) * 100)
-                    elif metric == "contrast_ratio":
-                        values.append(min(getattr(row, metric) / 10, 100))
-                    else:
-                        values.append(getattr(row, metric))
-                else:
-                    values.append(0)
-
-            plt.bar(
-                x + i * width,
-                values,
-                width,
-                label=metric.replace("_", " ").title(),
-                color=["#FF9999", "#66B2FF", "#99FF99"][i],
-            )
-
-        plt.xlabel("Фотографии")
-        plt.ylabel("Значение")
-        plt.title("Сравнение цветовых характеристик")
-        plt.xticks(x + width, photos, rotation=45, ha="right")
-        plt.legend()
-        plt.ylim(0, 100)
-
-
-
-    elif method_id == "method2":  # Просьба в данном блоке не менять ничего, или сообщить Хромых ИА об изменениях
-
-        num_photos = len(table)
-
-        if num_photos == 0:
-            raise ValueError("Нет данных для построения диаграммы")
-
-        # Если одно фото, создаем один подграфик, иначе создаем сетку
-
-        if num_photos == 1:
-            fig, ax = plt.subplots(1, 1, figsize=(8, 4))
-            axes = [ax]
-
-        else:
-            cols = 2
-            rows = (num_photos + 1) // cols
-            fig, axes = plt.subplots(rows, cols, figsize=(12, 4 * rows))
-            axes = axes.flatten()
-
-        for i, row in enumerate(table):
-            try:
-                hist = json.loads(row.hist) if isinstance(row.hist, str) else row.hist
-                bin_edges = json.loads(row.bin_edges) if isinstance(row.bin_edges, str) else row.bin_edges
-                centers = 0.5 * (np.array(bin_edges[:-1]) + np.array(bin_edges[1:]))
-                ax = axes[i]
-                ax.plot(centers, hist, label="Гистограмма", color="blue")
-                ax.axvline(0, color="red", linestyle="--", label="Ось симметрии")
-                ax.set_title(row.photo_name)
-                ax.set_xlabel("log(градиент по радиусу)")
-                ax.set_ylabel("Плотность")
-                ax.grid(True)
-                ax.legend()
-
-            except Exception as e:
-                ax = axes[i]
-                ax.text(0.5, 0.5, f"Ошибка:\n{e}", ha="center", va="center")
-                ax.axis("off")
-                
-        if num_photos > 1:
-
-            for j in range(i + 1, len(axes)):
-                axes[j].axis("off")
-
-        plt.tight_layout()
-
-    else:
-        # Для остальных методов создаем линейную диаграмму
-        photos = [row.photo_name for row in table]
-        metrics = METHOD_METRICS[method_id]
-
-        for metric in metrics:
-            values = []
-            for row in table:
-                if hasattr(row, metric) and getattr(row, metric) is not None:
-                    values.append(getattr(row, metric))
-                else:
-                    values.append(0)
-
-            plt.plot(photos, values, marker="o", label=metric.replace("_", " ").title())
-
-        plt.xlabel("Фотографии")
-        plt.ylabel("Значение")
-        plt.title(f"Сравнение метрик ({ANALYSIS_METHODS[method_id]})")
-        plt.xticks(rotation=45, ha="right")
-        plt.legend()
-
-    plt.tight_layout()
-
-    # Сохраняем диаграмму во временный файл
-    with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
-        plt.savefig(tmp.name, bbox_inches="tight", dpi=300)
-        plt.close()
-        return tmp.name
-
-
-async def send_metrics_chart(message, metrics, method_id, phone_model=None):
-    """Отправляет диаграмму с метриками."""
-    try:
-        chart_path = create_metrics_chart(metrics, method_id, phone_model)
-        await message.answer_photo(
-            FSInputFile(chart_path),
-            caption=f"Диаграмма метрик ({ANALYSIS_METHODS[method_id]})"
-            + (f" - {phone_model}" if phone_model else ""),
-        )
-        os.remove(chart_path)
-    except Exception as e:
-        await message.answer(f"Ошибка при создании диаграммы: {str(e)}")
-
-
-async def send_combined_chart(message, table, method_id):
-    """Отправляет общую диаграмму для всех фотографий модели."""
-    try:
-        chart_path = create_combined_chart(table, method_id)
-        await message.answer_photo(
-            FSInputFile(chart_path),
-            caption=f"Общая диаграмма метрик ({ANALYSIS_METHODS[method_id]})",
-        )
-        os.remove(chart_path)
-    except Exception as e:
-        await message.answer(f"Ошибка при создании общей диаграммы: {str(e)}")
-
-
-@router.message(F.content_type == ContentType.DOCUMENT)
-async def handle_photo(message: Message):
-    """Обработка документа с фото."""
-    user_id = message.from_user.id
-
-    if user_id not in user_methods:
-        await message.reply(
-            "Сначала выбери метод анализа! Используй команду /select_method",
-        )
-        return
-
-    if user_id not in user_phone_models:
-        await message.reply(
-            "Сначала выбери модель телефона! Используй команду /select_phone",
-        )
-        return
-
-    if not (message.document and message.document.mime_type.startswith("image/")):
-        await message.reply("Отправь изображение в виде документа!")
-        return
-
-    photo_file_id = message.document.file_id
-    current_method = user_methods[user_id]
-    current_phone = user_phone_models[user_id]
-    photo_name = message.document.file_name
-
-    file_info = await bot.get_file(photo_file_id)
-    with tempfile.NamedTemporaryFile(delete=False) as temp_file:
-        file_path = temp_file.name
-        await bot.download_file(file_info.file_path, file_path)
-
-    try:
-        img = Image(cv2.imread(file_path))
-        img.analyze()
-
-        # Фильтруем метрики только для выбранного метода
-        method_metrics = {
-            k: v for k, v in img.metrics.items() if k in METHOD_METRICS[current_method]
-        }
-
-        for key in ["hist", "bin_edges", "grad_flat"]: # Просьба в данном блоке не менять ничего, или сообщить Хромых ИА об изменениях
-            if key in method_metrics and isinstance(method_metrics[key], list):
-                method_metrics[key] = json.dumps(method_metrics[key])
-
-        # Работа с БД
-        phone_model = repo.get_phone_model(current_phone)
-        repo.add_rating(phone_model.id, photo_name, method_metrics, current_method)
-
-        # Формируем ответ
-        response = f"Результаты анализа для {current_phone} (Метод: {ANALYSIS_METHODS[current_method]}):\n\n"
-
-        # Форматируем метрики в зависимости от метода
-        if current_method == "method5":  # Цветовые метрики
-            response += "Цветовые характеристики:\n"
-            if "color_gamut" in method_metrics:
-                response += f"• Цветовой охват: {method_metrics['color_gamut']:.1f}% (от sRGB)\n"
-            if "white_balance" in method_metrics:
-                wb = method_metrics["white_balance"]
-                wb_status = (
-                    "Отличный"
-                    if 0.95 <= wb <= 1.05
-                    else "Хороший" if 0.9 <= wb <= 1.1 else "Требует коррекции"
-                )
-                response += f"• Баланс белого: {wb:.2f} ({wb_status})\n"
-            if "contrast_ratio" in method_metrics:
-                cr = method_metrics["contrast_ratio"]
-                cr_status = (
-                    "Высокий" if cr > 1000 else "Средний" if cr > 500 else "Низкий"
-                )
-                response += f"• Контрастность: {cr:.1f}:1 ({cr_status})\n"
-        elif current_method == "method2":
-            if "vignetting" in method_metrics: # Просьба в данном блоке не менять ничего, или сообщить Хромых ИА об изменениях
-                response += f"• Виньетирование: {method_metrics['vignetting']:.2f}\n"
-        else:  # Остальные метрики
-            for metric, value in method_metrics.items():
-                metric_name = metric.replace("_", " ").title()
-                response += f"• {metric_name}: {value:.2f}\n"
-
-        response += "\nРезультаты сохранены!\nИспользуй /ratings для просмотра таблицы рейтингов.\n"
-
-        # Отправляем текстовый ответ
-        await message.reply(response)
-
-        # Отправляем диаграмму
-        await send_metrics_chart(message, method_metrics, current_method, current_phone)
-
-    except Exception as e:
-        await message.reply(f"Ошибка при анализе: {str(e)}")
-    finally:
-        os.remove(file_path)
 
 
 @router.callback_query(F.data.startswith("phone_"))
@@ -635,9 +360,13 @@ async def callback_method_selected(callback):
                             )
                             response += f"  • Контрастность: {cr:.1f}:1 ({cr_status})\n"
 
-                    elif method_id == "method2": # Просьба в данном блоке не менять ничего, или сообщить Хромых ИА об изменениях
+                    elif (
+                        method_id == "method2"
+                    ):  # Просьба в данном блоке не менять ничего, или сообщить Хромых ИА об изменениях
                         if "vignetting" in metrics:
-                            response += f"  • Виньетирование: {metrics['vignetting']:.2f}\n"
+                            response += (
+                                f"  • Виньетирование: {metrics['vignetting']:.2f}\n"
+                            )
 
                     else:  # Остальные метрики
                         for metric, value in metrics.items():
@@ -661,17 +390,19 @@ async def callback_method_selected(callback):
         else:
             # Устанавливаем метод для анализа
             user_methods[user_id] = method_id
-            if (ANALYSIS_METHODS[method_id] == "Метод 2 - Виньетирование"):
+            if ANALYSIS_METHODS[method_id] == "Метод 2 - Виньетирование":
                 await callback.message.answer(
                     f"Выбран метод: {ANALYSIS_METHODS[method_id]}\n"
                     "Теперь можешь отправлять фото для анализа!\n"
-                    "\n *Для данного метода необходимо выполнить следующие условия съёмки:* \n" \
-                    "\n1) Необходимо снимать белый объект (лист А4, доска в аудитории с белым фоном," \
-                    "стена однотонного белого цвета и т.д.), который равно освещён (теней не должно быть вовсе)" \
-                    "\n2) Расстояние до объекта не должно быть очень близким (меньше 10 см). Рекомендуемое расстояние" \
-                    "камеры до объекта от 15 см до метра (при условии что объект занимает весь кадр целиком)\n" \
-                    "\n *Для данного метода необходимо выполнить следующие условия настройки камеры:* \n" \
-                    "\nНеобходимо отключить все фильтры, улучшения (ИИ, автоматическая коррекция и так далее)", parse_mode="Markdown")
+                    "\n *Для данного метода необходимо выполнить следующие условия съёмки:* \n"
+                    "\n1) Необходимо снимать белый объект (лист А4, доска в аудитории с белым фоном,"
+                    "стена однотонного белого цвета и т.д.), который равно освещён (теней не должно быть вовсе)"
+                    "\n2) Расстояние до объекта не должно быть очень близким (меньше 10 см). Рекомендуемое расстояние"
+                    "камеры до объекта от 15 см до метра (при условии что объект занимает весь кадр целиком)\n"
+                    "\n *Для данного метода необходимо выполнить следующие условия настройки камеры:* \n"
+                    "\nНеобходимо отключить все фильтры, улучшения (ИИ, автоматическая коррекция и так далее)",
+                    parse_mode="Markdown",
+                )
             else:
                 await callback.message.answer(
                     f"Выбран метод: {ANALYSIS_METHODS[method_id]}\n"
@@ -729,19 +460,348 @@ async def handle_custom_phone_name(message: Message, state: FSMContext):
         await state.clear()
 
 
-@router.message()
-async def handle_invalid_input(message: Message, state: FSMContext):
-    """Обработка всех остальных случаев."""
-    current_state = await state.get_state()
+def create_metrics_chart(metrics, method_id, phone_model=None):
+    """Создает диаграмму для метрик."""
+    plt.figure(figsize=(10, 6))
 
-    if current_state == PhoneModelStates.waiting_for_model_name:
-        await message.answer(
-            "Пожалуйста, введи название модели телефона или нажми /cancel для отмены."
+    if method_id == "method5":
+        # Для цветовых метрик создаем столбчатую диаграмму
+        labels = []
+        values = []
+        colors = []
+
+        if "color_gamut" in metrics:
+            labels.append("Цветовой охват")
+            values.append(metrics["color_gamut"])
+            colors.append("#FF9999")
+
+        if "white_balance" in metrics:
+            labels.append("Баланс белого")
+            values.append(metrics["white_balance"] * 100)  # Преобразуем в проценты
+            colors.append("#66B2FF")
+
+        if "contrast_ratio" in metrics:
+            labels.append("Контрастность")
+            values.append(
+                min(metrics["contrast_ratio"] / 10, 100)
+            )  # Нормализуем до 100
+            colors.append("#99FF99")
+
+        plt.bar(labels, values, color=colors)
+        plt.title(
+            "Цветовые характеристики" + (f" - {phone_model}" if phone_model else "")
+        )
+        plt.ylabel("Значение")
+        plt.ylim(0, 100)
+
+    elif (
+        method_id == "method2"
+    ):  # Просьба в данном блоке не менять ничего, или сообщить Хромых ИА об изменениях
+
+        hist = (
+            json.loads(metrics["hist"])
+            if isinstance(metrics["hist"], str)
+            else metrics["hist"]
+        )
+        bin_edges = (
+            json.loads(metrics["bin_edges"])
+            if isinstance(metrics["bin_edges"], str)
+            else metrics["bin_edges"]
+        )
+
+        centers = 0.5 * (np.array(bin_edges[:-1]) + np.array(bin_edges[1:]))
+
+        plt.figure(figsize=(8, 4))
+        plt.plot(centers, hist, label="Гистограмма", color="blue")
+        plt.axvline(0, color="red", linestyle="--", label="Ось симметрии")
+        plt.title("Гистограмма логарифмированных радиальных градиентов")
+        plt.xlabel("log(градиент по радиусу)")
+        plt.ylabel("Плотность")
+        plt.legend()
+        plt.grid(True)
+        plt.tight_layout()
+
+    else:
+        # Для остальных методов создаем круговую диаграмму
+        labels = []
+        values = []
+
+        for metric, value in metrics.items():
+            metric_name = metric.replace("_", " ").title()
+            labels.append(metric_name)
+            values.append(value)
+
+        plt.pie(values, labels=labels, autopct="%1.1f%%")
+        plt.title(
+            f"Метрики ({ANALYSIS_METHODS[method_id]})"
+            + (f" - {phone_model}" if phone_model else "")
+        )
+
+    # Сохраняем диаграмму во временный файл
+    with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
+        plt.savefig(tmp.name, bbox_inches="tight", dpi=300)
+        plt.close()
+        return tmp.name
+
+
+def create_combined_chart(table, method_id):
+    """Создает общую диаграмму для всех фотографий модели."""
+    plt.figure(figsize=(12, 8))
+
+    if method_id == "method5":
+        # Для цветовых метрик создаем групповую столбчатую диаграмму
+        photos = [row.photo_name for row in table]
+        metrics = ["color_gamut", "white_balance", "contrast_ratio"]
+        x = np.arange(len(photos))
+        width = 0.25
+
+        for i, metric in enumerate(metrics):
+            values = []
+            for row in table:
+                if hasattr(row, metric) and getattr(row, metric) is not None:
+                    if metric == "white_balance":
+                        values.append(getattr(row, metric) * 100)
+                    elif metric == "contrast_ratio":
+                        values.append(min(getattr(row, metric) / 10, 100))
+                    else:
+                        values.append(getattr(row, metric))
+                else:
+                    values.append(0)
+
+            plt.bar(
+                x + i * width,
+                values,
+                width,
+                label=metric.replace("_", " ").title(),
+                color=["#FF9999", "#66B2FF", "#99FF99"][i],
+            )
+
+        plt.xlabel("Фотографии")
+        plt.ylabel("Значение")
+        plt.title("Сравнение цветовых характеристик")
+        plt.xticks(x + width, photos, rotation=45, ha="right")
+        plt.legend()
+        plt.ylim(0, 100)
+
+    elif (
+        method_id == "method2"
+    ):  # Просьба в данном блоке не менять ничего, или сообщить Хромых ИА об изменениях
+
+        num_photos = len(table)
+
+        if num_photos == 0:
+            raise ValueError("Нет данных для построения диаграммы")
+
+        # Если одно фото, создаем один подграфик, иначе создаем сетку
+
+        if num_photos == 1:
+            ax = plt.subplots(1, 1, figsize=(8, 4))
+            axes = [ax]
+
+        else:
+            cols = 2
+            rows = (num_photos + 1) // cols
+            axes = plt.subplots(rows, cols, figsize=(12, 4 * rows))
+            axes = axes.flatten()
+
+        for i, row in enumerate(table):
+            try:
+                hist = json.loads(row.hist) if isinstance(row.hist, str) else row.hist
+                bin_edges = (
+                    json.loads(row.bin_edges)
+                    if isinstance(row.bin_edges, str)
+                    else row.bin_edges
+                )
+                centers = 0.5 * (np.array(bin_edges[:-1]) + np.array(bin_edges[1:]))
+                ax = axes[i]
+                ax.plot(centers, hist, label="Гистограмма", color="blue")
+                ax.axvline(0, color="red", linestyle="--", label="Ось симметрии")
+                ax.set_title(row.photo_name)
+                ax.set_xlabel("log(градиент по радиусу)")
+                ax.set_ylabel("Плотность")
+                ax.grid(True)
+                ax.legend()
+
+            except Exception as e:
+                ax = axes[i]
+                ax.text(0.5, 0.5, f"Ошибка:\n{e}", ha="center", va="center")
+                ax.axis("off")
+
+        if num_photos > 1:
+
+            for j in range(i + 1, len(axes)):
+                axes[j].axis("off")
+
+        plt.tight_layout()
+
+    else:
+        # Для остальных методов создаем линейную диаграмму
+        photos = [row.photo_name for row in table]
+        metrics = METHOD_METRICS[method_id]
+
+        for metric in metrics:
+            values = []
+            for row in table:
+                if hasattr(row, metric) and getattr(row, metric) is not None:
+                    values.append(getattr(row, metric))
+                else:
+                    values.append(0)
+
+            plt.plot(photos, values, marker="o", label=metric.replace("_", " ").title())
+
+        plt.xlabel("Фотографии")
+        plt.ylabel("Значение")
+        plt.title(f"Сравнение метрик ({ANALYSIS_METHODS[method_id]})")
+        plt.xticks(rotation=45, ha="right")
+        plt.legend()
+
+    plt.tight_layout()
+
+    # Сохраняем диаграмму во временный файл
+    with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
+        plt.savefig(tmp.name, bbox_inches="tight", dpi=300)
+        plt.close()
+        return tmp.name
+
+
+async def send_metrics_chart(message, metrics, method_id, phone_model=None):
+    """Отправляет диаграмму с метриками."""
+    try:
+        chart_path = create_metrics_chart(metrics, method_id, phone_model)
+        await message.answer_photo(
+            FSInputFile(chart_path),
+            caption=f"Диаграмма метрик ({ANALYSIS_METHODS[method_id]})"
+            + (f" - {phone_model}" if phone_model else ""),
+        )
+        os.remove(chart_path)
+    except Exception as e:
+        await message.answer(f"Ошибка при создании диаграммы: {str(e)}")
+
+
+async def send_combined_chart(message, table, method_id):
+    """Отправляет общую диаграмму для всех фотографий модели."""
+    try:
+        chart_path = create_combined_chart(table, method_id)
+        await message.answer_photo(
+            FSInputFile(chart_path),
+            caption=f"Общая диаграмма метрик ({ANALYSIS_METHODS[method_id]})",
+        )
+        os.remove(chart_path)
+    except Exception as e:
+        await message.answer(f"Ошибка при создании общей диаграммы: {str(e)}")
+
+
+@router.message(F.content_type == ContentType.DOCUMENT)
+async def handle_photo(message: Message):
+    """Обработка документа с фото."""
+    user_id = message.from_user.id
+
+    if user_id not in user_methods:
+        await message.reply(
+            "Сначала выбери метод анализа! Используй команду /select_method",
         )
         return
 
-    await message.reply(
-        "Пожалуйста, сначала выбери метод анализа, а затем отправь фото как документ с подписью (модель телефона).\n"
-        "Для любых устройств: Прикрепить -> Файл -> Выбрать нужное фото -> Ввести в поле текста модель телефона -> Отправить",
-        reply_markup=get_main_keyboard(),
-    )
+    if user_id not in user_phone_models:
+        await message.reply(
+            "Сначала выбери модель телефона! Используй команду /select_phone",
+        )
+        return
+
+    if not (message.document and message.document.mime_type.startswith("image/")):
+        await message.reply("Отправь изображение в виде документа!")
+        return
+
+    photo_file_id = message.document.file_id
+    current_method = user_methods[user_id]
+    current_phone = user_phone_models[user_id]
+    photo_name = message.document.file_name
+
+    file_info = await bot.get_file(photo_file_id)
+    with tempfile.NamedTemporaryFile(delete=False) as temp_file:
+        file_path = temp_file.name
+        await bot.download_file(file_info.file_path, file_path)
+
+    try:
+        img = Image(cv2.imread(file_path))
+        img.analyze()
+
+        # Фильтруем метрики только для выбранного метода
+        method_metrics = {
+            k: v for k, v in img.metrics.items() if k in METHOD_METRICS[current_method]
+        }
+
+        for key in [
+            "hist",
+            "bin_edges",
+            "grad_flat",
+        ]:  # Просьба в данном блоке не менять ничего, или сообщить Хромых ИА об изменениях
+            if key in method_metrics and isinstance(method_metrics[key], list):
+                method_metrics[key] = json.dumps(method_metrics[key])
+
+        # Работа с БД
+        phone_model = repo.get_phone_model(current_phone)
+        repo.add_rating(phone_model.id, photo_name, method_metrics, current_method)
+
+        # Формируем ответ
+        response = f"Результаты анализа для {current_phone} (Метод: {ANALYSIS_METHODS[current_method]}):\n\n"
+
+        # Форматируем метрики в зависимости от метода
+        if current_method == "method5":  # Цветовые метрики
+            response += "Цветовые характеристики:\n"
+            if "color_gamut" in method_metrics:
+                response += f"• Цветовой охват: {method_metrics['color_gamut']:.1f}% (от sRGB)\n"
+            if "white_balance" in method_metrics:
+                wb = method_metrics["white_balance"]
+                wb_status = (
+                    "Отличный"
+                    if 0.95 <= wb <= 1.05
+                    else "Хороший" if 0.9 <= wb <= 1.1 else "Требует коррекции"
+                )
+                response += f"• Баланс белого: {wb:.2f} ({wb_status})\n"
+            if "contrast_ratio" in method_metrics:
+                cr = method_metrics["contrast_ratio"]
+                cr_status = (
+                    "Высокий" if cr > 1000 else "Средний" if cr > 500 else "Низкий"
+                )
+                response += f"• Контрастность: {cr:.1f}:1 ({cr_status})\n"
+        elif current_method == "method2":
+            if (
+                "vignetting" in method_metrics
+            ):  # Просьба в данном блоке не менять ничего, или сообщить Хромых ИА об изменениях
+                response += f"• Виньетирование: {method_metrics['vignetting']:.2f}\n"
+        else:  # Остальные метрики
+            for metric, value in method_metrics.items():
+                metric_name = metric.replace("_", " ").title()
+                response += f"• {metric_name}: {value:.2f}\n"
+
+        response += "\nРезультаты сохранены!\nИспользуй /ratings для просмотра таблицы рейтингов.\n"
+
+        # Отправляем текстовый ответ
+        await message.reply(response)
+
+        # Отправляем диаграмму
+        await send_metrics_chart(message, method_metrics, current_method, current_phone)
+
+    except Exception as e:
+        await message.reply(f"Ошибка при анализе: {str(e)}")
+    finally:
+        os.remove(file_path)
+
+
+# @router.message()
+# async def handle_invalid_input(message: Message, state: FSMContext):
+# """Обработка всех остальных случаев."""
+# current_state = await state.get_state()
+
+# if current_state == PhoneModelStates.waiting_for_model_name:
+#     await message.answer(
+#         "Пожалуйста, введи название модели телефона или нажми /cancel для отмены."
+#     )
+#     return
+
+# await message.reply(
+#     "Пожалуйста, сначала выбери метод анализа, а затем отправь фото как документ с подписью (модель телефона).\n"
+#     "Для любых устройств: Прикрепить -> Файл -> Выбрать нужное фото -> Ввести в поле текста модель телефона -> Отправить",
+#     reply_markup=get_main_keyboard(),
+# )
