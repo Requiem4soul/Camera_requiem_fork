@@ -21,4 +21,4 @@ def calculate_psnr(image_data: bytes, kernel_size: int = 5) -> float:
     # Линейная нормализация: 10 dB → 0 баллов, 50 dB → 10 баллов
     score = (psnr - 10) / (50 - 10) * 10
     score_final = round(score, 1)
-    print (score_final)
+    return ideal, image, psnr, core_final
