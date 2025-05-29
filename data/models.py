@@ -29,7 +29,6 @@ class Rating(Base):
     vignetting = Column(Float) # Просьба в данной строке не менять ничего, или сообщить Хромых ИА об изменениях
     hist = Column(Text) # Просьба в данной строке не менять ничего, или сообщить Хромых ИА об изменениях
     bin_edges = Column(Text) # Просьба в данной строке не менять ничего, или сообщить Хромых ИА об изменениях
-    grad_flat = Column(Text) # Просьба в данной строке не менять ничего, или сообщить Хромых ИА об изменениях
     noise = Column(Float)
     sharpness = Column(Float)
     color_gamut = Column(Float)
