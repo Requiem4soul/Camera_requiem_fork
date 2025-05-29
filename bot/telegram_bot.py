@@ -437,7 +437,7 @@ async def callback_method_selected(callback):
                     "Объект должен полностью занимать кадр.",
                     parse_mode="Markdown",
                 )
-               else:
+            else:
                 await callback.message.answer(
                     f"Выбран метод: {ANALYSIS_METHODS[method_id]}\n"
                     "Теперь можешь отправлять фото для анализа!"
