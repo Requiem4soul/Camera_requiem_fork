@@ -1,6 +1,7 @@
 import numpy as np
 import cv2
 
+
 def calculate_chromatic_aberration(image_data):
     b, g, r = cv2.split(image_data)
 

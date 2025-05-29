@@ -1,53 +1,101 @@
-from data.models import Rating
-from data.db import get_session
+from sqlalchemy.orm import Session
+from data.models import Rating, PhoneModel
+from data.db import engine
 from sqlalchemy import func
 from sqlalchemy import desc
 
 
 class RatingRepository:
-    def add_rating(self, phone_model, metrics):
-        session = get_session()
-        try:
-            total_score = sum(metrics.values()) / len(metrics) if metrics else None
+    def __init__(self):
+        self.engine = engine
+
+    def initialize_default_models(self):
+        """Инициализация предустановленных моделей телефонов."""
+        with Session(self.engine) as session:
+            default_models = ["iPhone 14", "iPhone 15", "iPhone 16"]
+            for model_name in default_models:
+                existing_model = (
+                    session.query(PhoneModel).filter_by(name=model_name).first()
+                )
+                if not existing_model:
+                    new_model = PhoneModel(name=model_name, is_default=True)
+                    session.add(new_model)
+            session.commit()
+
+    def add_phone_model(self, model_name: str) -> PhoneModel:
+        """Добавление новой модели телефона."""
+        with Session(self.engine) as session:
+            # Проверяем, существует ли уже такая модель
+            existing_model = (
+                session.query(PhoneModel).filter_by(name=model_name).first()
+            )
+            if existing_model:
+                return existing_model
+
+            # Создаем новую модель
+            new_model = PhoneModel(name=model_name, is_default=False)
+            session.add(new_model)
+            session.commit()
+            session.refresh(new_model)
+            return new_model
+
+    def get_all_phone_models(self):
+        """Получение списка всех моделей телефонов."""
+        with Session(self.engine) as session:
+            return session.query(PhoneModel).all()
+
+    def get_phone_model(self, model_name: str) -> PhoneModel:
+        """Получение модели телефона по имени."""
+        with Session(self.engine) as session:
+            return session.query(PhoneModel).filter_by(name=model_name).first()
+
+    def add_rating(
+        self, phone_model_id: int, photo_name: str, metrics: dict, analysis_method: str
+    ):
+        """Добавление нового рейтинга."""
+        with Session(self.engine) as session:
             rating = Rating(
-                phone_model=phone_model,
-                sharpness=metrics.get("sharpness"),
-                noise=metrics.get("noise"),
-                glare=metrics.get("glare"),
-                # Тут надо будет дополнять новыми метриками
-                chromatic_aberration=metrics.get("chromatic_aberration"),
-                total_score=total_score
+                phone_model_id=phone_model_id,
+                photo_name=photo_name,
+                analysis_method=analysis_method,
+                **metrics,
             )
             session.add(rating)
             session.commit()
-            return rating
-        except Exception as e:
-            session.rollback()
-            raise e
-        finally:
-            session.close()
 
-    def get_average_ratings(self):
-        session = get_session()
-        try:
-            results = session.query(
-                Rating.phone_model,
-                func.avg(Rating.sharpness).label("avg_sharpness"),
-                func.avg(Rating.noise).label("avg_noise"),
-                func.avg(Rating.glare).label("avg_glare"),
-                # Тут надо будет дополнять новыми метриками
-                func.avg(Rating.chromatic_aberration).label("avg_chromatic_aberration"),
-                func.avg(Rating.total_score).label("avg_total_score")
-            ).group_by(Rating.phone_model).order_by(desc("avg_total_score")).all()
-            return [
-                {
-                    "phone_model": r.phone_model,
-                    "sharpness": r.avg_sharpness,
-                    "noise": r.avg_noise,
-                    "glare": r.avg_glare,
-                    "total_score": r.avg_total_score
-                }
-                for r in results
-            ]
-        finally:
-            session.close()
+    def get_ratings_by_model_and_method(
+        self, phone_model_id: int, analysis_method: str
+    ):
+        """Получение рейтингов для конкретной модели и метода анализа."""
+        with Session(self.engine) as session:
+            return (
+                session.query(Rating)
+                .filter_by(
+                    phone_model_id=phone_model_id, analysis_method=analysis_method
+                )
+                .all()
+            )
+
+    def get_average_ratings(self, analysis_method: str):
+        """Получение средних рейтингов по всем моделям для конкретного метода анализа."""
+        with Session(self.engine) as session:
+            return (
+                session.query(
+                    PhoneModel.name.label("phone_model"),
+                    Rating.photo_name,
+                    Rating.chromatic_aberration,
+                    Rating.vignetting,
+                    Rating.hist, # Просьба в данной строчке не менять ничего, или сообщить Хромых ИА об изменениях
+                    Rating.bin_edges, # Просьба в данной строчке не менять ничего, или сообщить Хромых ИА об изменениях
+                    Rating.grad_flat, # Просьба в данной строчке не менять ничего, или сообщить Хромых ИА об изменениях
+                    Rating.noise,
+                    Rating.sharpness,
+                    Rating.color_gamut,
+                    Rating.white_balance,
+                    Rating.contrast_ratio,
+                    Rating.total_score,
+                )
+                .join(Rating, PhoneModel.id == Rating.phone_model_id)
+                .filter(Rating.analysis_method == analysis_method)
+                .all()
+            )

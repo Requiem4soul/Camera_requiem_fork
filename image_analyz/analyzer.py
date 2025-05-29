@@ -11,4 +11,9 @@ class Image:
         metric_functions = get_metrics()
         # Применяем каждую метрику
         for name, func in metric_functions.items():
-            self.metrics[name] = func(self.image_data)
+            result = func(self.image_data)
+            if name == "vignetting" and isinstance(result, dict): # Просьба в данном блоке не менять ничего, или сообщить Хромых ИА об изменениях
+                for subname, subvalue in result.items():
+                    self.metrics[subname] = subvalue
+            else:
+                self.metrics[name] = result
