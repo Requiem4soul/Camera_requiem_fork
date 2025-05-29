@@ -417,7 +417,7 @@ async def callback_method_selected(callback):
                     "\nНеобходимо отключить все фильтры, улучшения (ИИ, автоматическая коррекция и так далее)",
                     parse_mode="Markdown",
                 )
-            elif ANALYSIS_METHODS[method_id] == "Метод 3 -Шум":
+            elif method__id == "method3":
                 await callback.message.answer(
                     f"Выбран метод: {ANALYSIS_METHODS[method_id]}\n"
                     "Теперь можешь отправлять фото для анализа!\n"
@@ -437,8 +437,7 @@ async def callback_method_selected(callback):
                     "Объект должен полностью занимать кадр.",
                     parse_mode="Markdown",
                 )
-            else:
-            else:
+               else:
                 await callback.message.answer(
                     f"Выбран метод: {ANALYSIS_METHODS[method_id]}\n"
                     "Теперь можешь отправлять фото для анализа!"
