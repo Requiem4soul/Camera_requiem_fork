@@ -651,7 +651,7 @@ def create_combined_chart(table, method_id):
 
         plt.tight_layout()
     
-    elif (method_id = "method3"):
+    elif (method_id == "method3"):
         photos = [row.photo_name for row in table]
         metrics = METHOD_METRICS[method_id]
 
