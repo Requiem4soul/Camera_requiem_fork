@@ -38,7 +38,6 @@ def calculate_vignetting(image: np.ndarray, show_plot: bool = False) -> dict:
         "vignetting": round(score, 3),
         "hist": hist.tolist(),
         "bin_edges": bin_edges.tolist(),
-        "grad_flat": grad_flat.tolist()
     }
 
 
