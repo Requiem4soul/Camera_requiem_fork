@@ -12,10 +12,6 @@ def calculate_psnr(image_data: bytes, kernel_size: int = 5) -> float:
         return float('inf')
     max_pixel = 255.0
     psnr = 20 * np.log10(max_pixel / np.sqrt(mse))
-<<<<<<< Updated upstream
-    print(psnr)
-    return ideal, image, psnr
-=======
     if psnr == float('inf'):
         return 10.0
 
@@ -26,10 +22,3 @@ def calculate_psnr(image_data: bytes, kernel_size: int = 5) -> float:
     score = (psnr - 10) / (50 - 10) * 10
     score_final = round(score, 1)
     print (score_final)
-
-if __name__ == "__main__":
-    with open("example.jpg", "rb") as f:
-        image_bytes = f.read()
-    PSNR = calculate_psnr(image_bytes)
-    print (PSNR)
->>>>>>> Stashed changes
