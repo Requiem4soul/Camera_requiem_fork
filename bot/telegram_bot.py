@@ -822,7 +822,7 @@ async def handle_photo(message: Message):
 
                 v_score = method_metrics['vignetting']
 
-                # Спецом для Ромы
+                # Добавление эмодзи для понимания оценки
                 if v_score < 3.33:
                     emoji = "🟥"
                 elif v_score < 6.66:
