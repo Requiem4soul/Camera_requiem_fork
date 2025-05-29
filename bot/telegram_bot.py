@@ -442,9 +442,9 @@ async def callback_method_selected(callback):
                     f"Выбран метод: {ANALYSIS_METHODS[method_id]}\n"
                     "Теперь можешь отправлять фото для анализа!"
                 )
-        else:
-            await callback.message.answer("Ошибка при выборе метода. Попробуй еще раз.")
-        await callback.answer()
+    else:
+        await callback.message.answer("Ошибка при выборе метода. Попробуй еще раз.")
+    await callback.answer()
 
 
 @router.callback_query(F.data == "show_instructions")
