@@ -67,8 +67,9 @@ METHOD_METRICS = {
         "grad_flat",
     ],  #
     "method3": ["ideal",
-                "image"
-                "psnr"],
+                "image",
+                "psnr",
+                "rtg"],
     "method4": ["sharpness"],
     "method5": [
         "color_gamut",
@@ -375,7 +376,7 @@ async def callback_method_selected(callback):
                         bin_edges = json.loads(metrics["bin_edges"]) if isinstance(metrics["bin_edges"], str) else metrics["bin_edges"]
 
                     elif method_id == "method3":
-                        response += "Чем больше значение PSNR, тем менее зашумлённым является изображение:\n"
+                        response += "Значение PSNR в дБ\n"
                         if "psnr" in metrics:
                             response += f" Значение PSNR: {metrics['psnr']:.1f} \n"
                     
@@ -416,6 +417,27 @@ async def callback_method_selected(callback):
                     "\nНеобходимо отключить все фильтры, улучшения (ИИ, автоматическая коррекция и так далее)",
                     parse_mode="Markdown",
                 )
+            elif ANALYSIS_METHODS[method_id] == "Метод 3 -Шум":
+                await callback.message.answer(
+                    f"Выбран метод: {ANALYSIS_METHODS[method_id]}\n"
+                    "Теперь можешь отправлять фото для анализа!\n"
+                    "\n *Для оценки шума на камере, вам необходимо сделать фото со следующими параметрами камеры телефона:* \n"
+                    "\n1) ISO - 100 или минимально возможное устройстве(например, 50, 100, 200)."
+                    "Чем выше ISO — тем больше цифрового шума может возникнуть"
+                    "\n2) WB (Баланс Белого) - 5600K (соответствует дневному освещению)\n"
+                    "\n3) S (Выдержка) - 1/30 сек (Длинная, но не до смазывания)\n"
+                    "\n4) EV (Экспокоррекция) - 0 (Исключает автоматическую "дотяжку" экспозиции)"
+                    "\n5) F (Фокусировка) - Ручная, максимально близкая\n"
+                    "\n6) Вспышка - отключена\n"
+                    "\nДля настройки данных параметров, вы должны перейти во вкладку @Профи@ вашей камеры."
+                    "С этими настройками, вы должен сфотографировать любой чёрный объект."
+                    "Этот объект должен быть матовым, иметь гладкую текстуру."
+                    "Объект не должен стоят в чрезмерно освещённом месте (например прямо на солнце или напрямую под лампами\другим искусственным освещением)."
+                    "Вы должны сфотографировать объект вплотную."
+                    "Объект должен полностью занимать кадр.",
+                    parse_mode="Markdown",
+                )
+            else:
             else:
                 await callback.message.answer(
                     f"Выбран метод: {ANALYSIS_METHODS[method_id]}\n"
@@ -814,7 +836,7 @@ async def handle_photo(message: Message):
                 response += f"• Виньетирование: {method_metrics['vignetting']:.2f}\n"
         elif current_method == "method3":
             if "psnr_value" in method_metrics:
-                response += f"• Оценка PSNR: {method_metrics['psnr']:.2f} дБ\n"
+                response += f"• Оценка PSNR: {method_metrics['psnr']:.2f}\n"
                    
         else:  # Остальные метрики
             for metric, value in method_metrics.items():
