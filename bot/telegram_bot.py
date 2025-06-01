@@ -25,6 +25,8 @@ from data.repository import RatingRepository
 from sqlalchemy.orm import Session
 from data.models import PhoneModel
 from data.db import engine
+from bot.input_validation import validate_text_only_input, validate_document_photo_only # Для проверки ввода пользователя
+
 
 # Токен ТОЛЬКО подгружать из env! Не менять вручную!
 load_dotenv()
@@ -464,6 +466,13 @@ async def callback_add_custom_phone(callback: Message, state: FSMContext):
 @router.message(PhoneModelStates.waiting_for_model_name)
 async def handle_custom_phone_name(message: Message, state: FSMContext):
     """Обработка ввода названия новой модели телефона."""
+
+    # Валидация входных данных
+    is_valid, error_message = validate_text_only_input(message)
+    if not is_valid:
+        await message.answer(error_message)
+        return
+
     model_name = message.text.strip()
     if not model_name:
         await message.answer("Название модели не может быть пустым. Попробуй еще раз.")
@@ -749,7 +758,7 @@ async def send_combined_chart(message, table, method_id):
         await message.answer(f"Ошибка при создании общей диаграммы: {str(e)}")
 
 
-@router.message(F.content_type == ContentType.DOCUMENT)
+@router.message() # Был убран фильтр на документ, чтобы пользователь получал ответ от бота что он отправил не так и мог получить доп. инструкции
 async def handle_photo(message: Message):
     """Обработка документа с фото."""
     user_id = message.from_user.id
@@ -766,8 +775,10 @@ async def handle_photo(message: Message):
         )
         return
 
-    if not (message.document and message.document.mime_type.startswith("image/")):
-        await message.reply("Отправь изображение в виде документа!")
+    # Валидация ввода пользователя
+    is_valid, error_message = validate_document_photo_only(message)
+    if not is_valid:
+        await message.reply(error_message)
         return
 
     photo_file_id = message.document.file_id
