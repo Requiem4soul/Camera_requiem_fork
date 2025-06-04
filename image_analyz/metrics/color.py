@@ -112,11 +112,37 @@ def calculate_color_gamut(image_data):
 def calculate_white_balance(image_data):
     """
     Оценивает баланс белого по отклонению от нейтрального серого.
-    Чем ближе к 1.0, тем лучше.
+    Использует серые патчи для оценки баланса белого.
+    Возвращает значение от 0 до 1, где:
+    - 1.0 означает идеальный баланс белого
+    - Значения < 1.0 указывают на отклонение от идеального баланса
     """
-    gray_img = cv2.cvtColor(image_data, cv2.COLOR_BGR2GRAY)
-    avg_brightness = np.mean(gray_img) / 255.0
-    return avg_brightness
+    # Извлекаем патчи из изображения
+    patches = extract_patches(image_data)
+
+    # Используем нижний ряд патчей (предполагается, что это серые патчи)
+    gray_patches = patches[18:24]
+
+    # Вычисляем среднее значение для каждого канала RGB
+    mean_rgb = np.mean(gray_patches, axis=0)
+
+    # Идеальный серый цвет должен иметь равные значения R, G и B
+    # Вычисляем отклонение от идеального серого
+    max_channel = np.max(mean_rgb)
+    min_channel = np.min(mean_rgb)
+
+    # Если все каналы равны, баланс белого идеальный (1.0)
+    # Чем больше разница между каналами, тем хуже баланс белого
+    if max_channel == 0:
+        return 1.0
+
+    # Нормализуем разницу между каналами
+    channel_diff = (max_channel - min_channel) / max_channel
+
+    # Преобразуем в оценку от 0 до 1
+    white_balance_score = 1.0 - channel_diff
+
+    return float(white_balance_score)
 
 
 def calculate_contrast_ratio(image):
