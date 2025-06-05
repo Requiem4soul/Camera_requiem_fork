@@ -1,14 +1,20 @@
 import asyncio
 from aiogram import Dispatcher
-from bot.telegram_bot import bot, router, set_commands
-from data.db import init_models
+from bot.telegram_bot import bot, router, set_commands, initialize_bot_dependencies
 from data.repository import RatingRepository
+from data.models import Base
+from data.db import engine
 
-repo = RatingRepository()
+async def safe_create_tables():
+    """Создаёт таблицы, если их ещё нет."""
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
 
 async def main():
-    await init_models()
+    await safe_create_tables()
+    repo = RatingRepository()
     await repo.initialize_default_models()
+    await initialize_bot_dependencies(repo)
 
     dp = Dispatcher()
     dp.include_router(router)

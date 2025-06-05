@@ -43,10 +43,13 @@ bot = Bot(token=TOKEN)
 
 router = Router()
 
-repo = RatingRepository()
+# Глобальная переме... глобальное желание удалить всё и начать снуля
+repo = None
 
-# Инициализация предустановленных моделей
-repo = RatingRepository()
+async def initialize_bot_dependencies(repository: RatingRepository):
+    """Инициализация зависимостей бота после создания таблиц БД"""
+    global repo
+    repo = repository
 
 
 # Состояния для FSM
