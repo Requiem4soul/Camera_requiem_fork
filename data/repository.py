@@ -87,7 +87,6 @@ class RatingRepository:
                     Rating.vignetting,
                     Rating.hist, # Просьба в данной строчке не менять ничего, или сообщить Хромых ИА об изменениях
                     Rating.bin_edges, # Просьба в данной строчке не менять ничего, или сообщить Хромых ИА об изменениях
-                    Rating.grad_flat, # Просьба в данной строчке не менять ничего, или сообщить Хромых ИА об изменениях
                     Rating.noise,
                     Rating.sharpness,
                     Rating.color_gamut,
