@@ -376,9 +376,9 @@ async def callback_method_selected(callback):
                         bin_edges = json.loads(metrics["bin_edges"]) if isinstance(metrics["bin_edges"], str) else metrics["bin_edges"]
 
                     elif method_id == "method3":
-                        response += "Значение PSNR в дБ\n"
+                        response += "Рейтинг PSNR в дБ\n"
                         if "psnr" in metrics:
-                            response += f" Значение PSNR: {metrics['psnr']:.1f} \n"
+                            response += f" Значение для PSNR: {metrics['psnr']:.1f} \n"
                     
                         
                     
@@ -417,7 +417,7 @@ async def callback_method_selected(callback):
                     "\nНеобходимо отключить все фильтры, улучшения (ИИ, автоматическая коррекция и так далее)",
                     parse_mode="Markdown",
                 )
-            elif method__id == "method3":
+            elif method_id == "method3":
                 await callback.message.answer(
                     f"Выбран метод: {ANALYSIS_METHODS[method_id]}\n"
                     "Теперь можешь отправлять фото для анализа!\n"
@@ -835,7 +835,7 @@ async def handle_photo(message: Message):
                 response += f"• Виньетирование: {method_metrics['vignetting']:.2f}\n"
         elif current_method == "method3":
             if "psnr_value" in method_metrics:
-                response += f"• Оценка PSNR: {method_metrics['psnr']:.2f}\n"
+                response += f"• Оценка PSNR: {method_metrics['rtg']:.f}\n"
                    
         else:  # Остальные метрики
             for metric, value in method_metrics.items():
