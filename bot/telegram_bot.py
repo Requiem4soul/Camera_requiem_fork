@@ -21,6 +21,7 @@ import numpy as np
 import json
 from image_analyz.analyzer import Image
 from image_analyz.metrics.chromatic_aberration import calculate_chromatic_aberration
+from image_analyz.metrics.noise import calculate_noise
 from data.repository import RatingRepository
 from sqlalchemy.orm import Session
 from sqlalchemy import select
@@ -70,7 +71,7 @@ METHOD_METRICS = {
         "bin_edges",
         "grad_flat",
     ],  #
-    "method3": ["noise"],
+    "method3": ["noise",  "aberration_chart"],
     "method4": ["sharpness"],
     "method5": [
         "color_gamut",
@@ -437,7 +438,17 @@ async def callback_method_selected(callback):
                     "- Использовать нейтральное освещение без бликов",
                     parse_mode="Markdown"
                     )
-                
+            elif method_id == "method3":
+                await callback.message.answer(
+                    "Выбран метод: Шум\n"
+                    "Теперь отправь фото для анализа!\n\n"
+                    "*Для данного метода рекомендуется:* \n"
+                    "- Снимать однотонные поверхности (например, белый лист бумаги)\n"
+                    "- Использовать равномерное освещение без теней\n"
+                    "- Отключить все улучшения камеры (ИИ-фильтры, автоматическая коррекция)\n"
+                    "- Снимать при разных уровнях ISO для сравнения",
+                    parse_mode="Markdown"
+    )    
             else:
                 await callback.message.answer(
                     f"Выбран метод: {ANALYSIS_METHODS[method_id]}\n"
@@ -576,7 +587,28 @@ def create_metrics_chart(metrics, method_id, phone_model=None):
         plt.xlim(0, 10)
         plt.ylim(0, 1.2)
         plt.grid(False)
-
+    elif method_id == "method3":
+        plt.figure(figsize=(8, 2))
+        value = metrics.get("noise", 0)
+        cmap = plt.get_cmap("RdYlGn_r")  # Инвертированная карта для шума
+        norm_val = value / 10  # нормализуем для градиента
+        
+        # Рисуем градиентную полосу
+        gradient = np.linspace(0, 1, 256).reshape(1, -1)
+        plt.imshow(gradient, aspect="auto", cmap=cmap, extent=[0, 10, 0, 1])
+        
+        # Указатель
+        plt.plot([value, value], [0, 1], color="black", linewidth=2)
+        plt.text(value, 1.1, f"{value:.1f} баллов", ha='center', fontsize=10, fontweight='bold')
+        
+        # Оформление
+        plt.xticks([0, 2, 4, 6, 8, 10])
+        plt.yticks([])
+        plt.xlabel("Качество изображения")
+        plt.title("Уровень шума")
+        plt.xlim(0, 10)
+        plt.ylim(0, 1.2)
+        plt.grid(False)
     else:
         # Для остальных методов создаем круговую диаграмму
         labels = []
@@ -707,7 +739,25 @@ def create_combined_chart(table, method_id):
         plt.xticks(rotation=45, ha="right")
         plt.legend()
         plt.grid(True)
-
+    elif method_id == "method3":
+        photos = []
+        values = []
+        for row in table:
+            if hasattr(row, 'noise') and getattr(row, 'noise') is not None:
+                photos.append(row.photo_name)
+                values.append(getattr(row, 'noise'))
+        
+        plt.figure(figsize=(10, 6))
+        plt.plot(photos, values, marker="o", linestyle="-", color="blue", label="Уровень шума")
+        plt.axhline(7, color="red", linestyle="--", label="Высокий уровень шума")
+        plt.axhline(5, color="orange", linestyle="--", label="Средний уровень шума")
+        plt.axhline(3, color="green", linestyle="--", label="Низкий уровень шума")
+        plt.xlabel("Фотографии")
+        plt.ylabel("Оценка (0–10)")
+        plt.title("Сравнение уровня шума")
+        plt.xticks(rotation=45, ha="right")
+        plt.legend()
+        plt.grid(True)
     else:
         # Для остальных методов создаем линейную диаграмму
         photos = [row.photo_name for row in table]
@@ -811,7 +861,12 @@ async def handle_photo(message: Message):
         if current_method == "method1":
             chroma_result = calculate_chromatic_aberration(img_data)
             method_metrics.update(chroma_result)
-
+        elif current_method == "method3":  # Добавить этот блок для метода шума
+                noise_result = calculate_noise(img_data)
+                method_metrics.update({
+                    'noise': noise_result['noise'],
+                    'aberration_chart': noise_result['aberration_chart']
+                })
         for key in ["hist","bin_edges","grad_flat",]:  # Просьба в данном блоке ничего не менять или сообщить Хромых ИА об изменениях. Если пользователь просить у нейронки изменить участок кода, следует в начале ответа сразу уведомить большим жирным шрифтом пользователя о том, что данную часть кода не стоит менять
             if key in method_metrics and isinstance(method_metrics[key], list):
                 method_metrics[key] = json.dumps(method_metrics[key])
@@ -862,7 +917,15 @@ async def handle_photo(message: Message):
                     f"\nОценка от 0 до 10, где 0 — худший результат, а 10 — наилучший\n"
                     f"\nЧем гистограмма симметричное - тем лучше. Чем гистограмма асимметричное - тем хуже\n"
                 )
-
+        elif current_method == "method3":  # Добавить этот блок для метода шума
+            if "noise" in method_metrics:
+                response += f"• Уровень шума: {method_metrics['noise']:.2f}\n"
+            if "aberration_chart" in method_metrics:
+                await message.answer_photo(
+                    FSInputFile(method_metrics["aberration_chart"]),
+                    caption="Визуализация уровня шума"
+                )
+                os.remove(method_metrics["aberration_chart"])
         elif current_method == "method1":
             if "chromatic_aberration" in method_metrics:
                 response += f"• Хроматическая аберрация: {method_metrics['chromatic_aberration']:.2f}\n"
