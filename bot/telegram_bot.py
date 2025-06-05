@@ -23,8 +23,9 @@ from image_analyz.analyzer import Image
 from image_analyz.metrics.chromatic_aberration import calculate_chromatic_aberration
 from data.repository import RatingRepository
 from sqlalchemy.orm import Session
+from sqlalchemy import select
 from data.models import PhoneModel
-from data.db import engine
+from data.db import async_session
 from bot.input_validation import validate_text_only_input, validate_document_photo_only # Для проверки ввода пользователя
 
 
@@ -44,7 +45,7 @@ router = Router()
 repo = RatingRepository()
 
 # Инициализация предустановленных моделей
-repo.initialize_default_models()
+repo = RatingRepository()
 
 
 # Состояния для FSM
@@ -125,8 +126,8 @@ def get_method_selection_keyboard():
     return keyboard
 
 
-def get_phone_selection_keyboard():
-    phones = repo.get_all_phone_models()
+async def get_phone_selection_keyboard():
+    phones = await repo.get_all_phone_models()
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(text=phone.name, callback_data=f"phone_{phone.id}")]
@@ -219,16 +220,18 @@ async def callback_select_method(callback: CallbackQuery):
 @router.message(Command(commands=["select_phone"]))
 async def select_phone(message: Message):
     """Выбор модели телефона."""
+    keyboard = await get_phone_selection_keyboard()
     await message.answer(
-        "Выбери модель телефона:", reply_markup=get_phone_selection_keyboard()
+        "Выбери модель телефона:", reply_markup=keyboard
     )
 
 
 @router.callback_query(F.data == "select_phone")
 async def callback_select_phone(callback: CallbackQuery):
     """Обработка нажатия на кнопку выбора модели телефона."""
+    keyboard = await get_phone_selection_keyboard()
     await callback.message.answer(
-        "Выбери модель телефона:", reply_markup=get_phone_selection_keyboard()
+        "Выбери модель телефона:", reply_markup=keyboard
     )
     await callback.answer()
 
@@ -240,14 +243,18 @@ async def add_phone(message: Message):
 
 
 @router.callback_query(F.data.startswith("phone_"))
-async def callback_phone_selected(callback):
+async def callback_phone_selected(callback: CallbackQuery):
     """Обработка выбора модели телефона."""
     phone_id = int(callback.data.replace("phone_", ""))
     user_id = callback.from_user.id
 
     try:
-        with Session(engine) as session:
-            phone_model = session.query(PhoneModel).filter_by(id=phone_id).first()
+        async with async_session() as session:
+            result = await session.execute(
+                select(PhoneModel).where(PhoneModel.id == phone_id)
+            )
+            phone_model = result.scalar_one_or_none()
+
             if phone_model:
                 user_phone_models[user_id] = phone_model.name
                 await callback.message.answer(
@@ -260,7 +267,7 @@ async def callback_phone_selected(callback):
                 )
     except Exception as e:
         await callback.message.answer(
-            f"Произошла ошибка при выборе модели: {str(e)}\n" "Попробуй еще раз."
+            f"Произошла ошибка при выборе модели: {str(e)}\nПопробуй еще раз."
         )
     await callback.answer()
 
@@ -274,7 +281,7 @@ async def handle_add_phone(message: Message):
         return
 
     try:
-        phone_model = repo.add_phone_model(model_name)
+        phone_model = await repo.add_phone_model(model_name)
         await message.answer(
             f"Модель {phone_model.name} успешно добавлена!\n"
             "Теперь можешь выбрать её в списке моделей."
@@ -320,8 +327,8 @@ async def callback_method_selected(callback):
 
             # Показываем рейтинги для выбранного метода и модели
             try:
-                phone_model = repo.get_phone_model(user_phone_models[user_id])
-                ratings = repo.get_ratings_by_model_and_method(
+                phone_model = await repo.get_phone_model(user_phone_models[user_id])
+                ratings = await repo.get_ratings_by_model_and_method(
                     phone_model.id, method_id
                 )
 
@@ -479,7 +486,7 @@ async def handle_custom_phone_name(message: Message, state: FSMContext):
         return
 
     try:
-        phone_model = repo.add_phone_model(model_name)
+        phone_model = await repo.add_phone_model(model_name)
         user_id = message.from_user.id
         user_phone_models[user_id] = phone_model.name
 
@@ -812,8 +819,8 @@ async def handle_photo(message: Message):
         method_metrics.pop("aberration_chart", None)
 
         # Работа с БД
-        phone_model = repo.get_phone_model(current_phone)
-        repo.add_rating(phone_model.id, photo_name, method_metrics, current_method)
+        phone_model = await repo.get_phone_model(current_phone)
+        await repo.add_rating(phone_model.id, photo_name, method_metrics, current_method)
 
         # Формируем ответ
         response = f"Результаты анализа для {current_phone} (Метод: {ANALYSIS_METHODS[current_method]}):\n\n"

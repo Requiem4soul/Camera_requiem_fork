@@ -38,6 +38,3 @@ class Rating(Base):
 
     # Связь с моделью телефона
     phone_model = relationship("PhoneModel")
-
-
-Base.metadata.create_all(bind=engine)

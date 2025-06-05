@@ -1,9 +1,12 @@
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
+from sqlalchemy.ext.declarative import declarative_base
 
-engine = create_engine("sqlite:///ratings.db", echo=False)
-Session = sessionmaker(bind=engine)
+DATABASE_URL = "sqlite+aiosqlite:///ratings.db"
 
+engine = create_async_engine(DATABASE_URL, echo=False)
+async_session = async_sessionmaker(engine, expire_on_commit=False)
 
-def get_session():
-    return Session()
+Base = declarative_base()
+async def init_models():
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)

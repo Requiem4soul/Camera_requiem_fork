@@ -1,9 +1,15 @@
 import asyncio
 from aiogram import Dispatcher
 from bot.telegram_bot import bot, router, set_commands
+from data.db import init_models
+from data.repository import RatingRepository
 
+repo = RatingRepository()
 
 async def main():
+    await init_models()
+    await repo.initialize_default_models()
+
     dp = Dispatcher()
     dp.include_router(router)
 
